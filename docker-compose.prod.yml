@@ -1,0 +1,87 @@
+# SDP — productie compose
+# Gebruik: docker compose -f docker-compose.prod.yml up -d
+#
+# Vereist een gevulde .env (zie .env.production.example).
+# In een echte deploy draait Postgres op managed-DB of aparte VM,
+# niet in deze compose. Voor pilot-go-live in een datacenter is dit
+# acceptabel.
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: sdp-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER vereist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD vereist}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB vereist}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backups:/backups:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Geen ports — alleen intern bereikbaar voor api
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: sdp/api:latest
+    container_name: sdp-api-prod
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET vereist - minimaal 32 tekens random}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7d}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-email-password}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST vereist}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM:?SMTP_FROM vereist}
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?vereist - publieke API URL}
+        NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Suriname Decentralisatie Platform}
+    image: sdp/web:latest
+    container_name: sdp-web-prod
+    restart: always
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: sdp-caddy
+    restart: always
+    depends_on:
+      - api
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

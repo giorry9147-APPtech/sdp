@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Build artifacts
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+*.log
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Testing
+coverage/
+.nyc_output/
+
+# Database / runtime data
+postgres-data/
+minio-data/
+redis-data/
+uploads/
+*.sqlite
+*.sqlite-journal
+
+# Prisma
+apps/api/prisma/migrations/dev.db*
+
+# Logs
+logs/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Misc
+.cache/
+.turbo/
+
+# Claude / sessie-state
+.claude/
+
+# Mail / dev-data
+mailpit-data/
+
+# Vercel
+.vercel/
+
+# Fly
+.fly/

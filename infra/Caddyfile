@@ -1,0 +1,48 @@
+# SDP Caddy config — auto-TLS via Let's Encrypt.
+# Vervang sdp.example.sr door productie-domein.
+
+{
+    # Productie: gebruik je eigen e-mail voor LE
+    email beheer@sdp.example.sr
+    # admin off  # uncomment voor extra security
+}
+
+# Burgerportaal + DC dashboard
+sdp.example.sr {
+    encode gzip zstd
+
+    # Security headers (NIS2/BIO-aligned)
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=(self)"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.sdp.example.sr; frame-ancestors 'none';"
+        -Server
+    }
+
+    reverse_proxy web:3000
+}
+
+# API (publiek voor frontend, intern voor S-Road later)
+api.sdp.example.sr {
+    encode gzip zstd
+
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        Access-Control-Allow-Origin "https://sdp.example.sr"
+        Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Authorization, Content-Type"
+        Access-Control-Allow-Credentials "true"
+        -Server
+    }
+
+    # Rate-limiting voor publieke endpoints (burger-meldpunt)
+    # In productie: gebruik Caddy ratelimit plugin of zet voor api/...
+    # Voor MVP: api zelf doet basis throttling
+
+    reverse_proxy api:4000
+}

@@ -1,0 +1,697 @@
+// SDP — Suriname Decentralisatie Platform
+// Database schema (PostgreSQL + PostGIS)
+//
+// Ontwerpprincipes:
+//  - Decentralisatie-first: districten + ressorten als kernentiteiten
+//  - Audit-trail vanaf dag 1 (geen write zonder log)
+//  - PostGIS vanaf dag 1 (geom-velden klaar voor Fase 3 GIS-viewer)
+//  - RBAC met scope (nationaal/district/ressort)
+//  - e-Suriname compatible: pluggable auth, ZGW-stijl zaak-concepten,
+//    OpenAPI-genereerbaar, geen lock-in op identity-provider
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BESTUURLIJKE STRUCTUUR — Grondwet art. 159-163 + WRO S.B. 1989 #44
+// ═══════════════════════════════════════════════════════════════════
+
+/// De 10 districten van Suriname (Decreet Districtenindeling 1983).
+model District {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique // bv. "PAR", "WAN", "SIP"
+  naam      String   @unique // bv. "Paramaribo"
+  hoofdstad String?  // bestuurscentrum
+  geom      Unsupported("geography(MultiPolygon, 4326)")?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ressorten         Ressort[]
+  bestuursressorten Bestuursressort[]
+  meldingen         Melding[]
+  vergunningen      Vergunning[]
+  projecten         Project[]
+  districtsplannen  Districtsplan[]
+  districtsfondsen  Districtsfonds[]
+  gebruikerRollen   GebruikerRol[]
+
+  @@map("districten")
+}
+
+/// 9 bestuursressorten (geen RR, hebben een bestuursopzichter).
+/// Vooral relevant in Sipaliwini (binnenland).
+model Bestuursressort {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  naam        String
+  districtId  Int      @map("district_id")
+  hoofdplaats String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  district  District  @relation(fields: [districtId], references: [id])
+  ressorten Ressort[]
+
+  @@unique([districtId, naam])
+  @@index([districtId])
+  @@map("bestuursressorten")
+}
+
+/// 62 ressorten (Decreet Ressortenindeling S.B. 1987 No. 67).
+/// Laagste bestuurlijke eenheid; heeft een Ressortraad (RR).
+model Ressort {
+  id                Int      @id @default(autoincrement())
+  code              String   @unique // bv. "PAR-CENTRUM"
+  naam              String
+  districtId        Int      @map("district_id")
+  bestuursressortId Int?     @map("bestuursressort_id")
+  geom              Unsupported("geography(MultiPolygon, 4326)")?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  district        District          @relation(fields: [districtId], references: [id])
+  bestuursressort Bestuursressort?  @relation(fields: [bestuursressortId], references: [id])
+  meldingen       Melding[]
+  projecten       Project[]
+  ressortplannen  Ressortplan[]
+  gebruikerRollen GebruikerRol[]
+
+  @@unique([districtId, naam])
+  @@index([districtId])
+  @@index([bestuursressortId])
+  @@map("ressorten")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// IDENTITY & ACCESS — pluggable auth, RBAC met scope
+// ═══════════════════════════════════════════════════════════════════
+
+enum AuthProvider {
+  EMAIL_PASSWORD // MVP-default
+  DIGITALE_ID    // toekomstig: e-Gov Government Authenticator
+  MAGIC_LINK     // burgers zonder account
+}
+
+enum UserStatus {
+  ACTIEF
+  GEBLOKKEERD
+  INGETROKKEN
+}
+
+model Gebruiker {
+  id               String       @id @default(cuid())
+  email            String?      @unique
+  telefoon         String?      @unique
+  naam             String
+  wachtwoordHash   String?      @map("wachtwoord_hash") // alleen voor EMAIL_PASSWORD
+  authProvider     AuthProvider @default(EMAIL_PASSWORD) @map("auth_provider")
+  externalId       String?      @map("external_id") // bv. Digitale-ID sub-claim
+  totpSecret       String?      @map("totp_secret")
+  totpVerified     Boolean      @default(false) @map("totp_verified")
+  status           UserStatus   @default(ACTIEF)
+  emailGeverifieerd Boolean     @default(false) @map("email_geverifieerd")
+  laatsteLogin     DateTime?    @map("laatste_login")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  rollen          GebruikerRol[]
+  meldingen       Melding[]             @relation("MeldingToegewezenAan")
+  meldingEvents   MeldingEvent[]
+  vergunningen    Vergunning[]          @relation("VergunningAanvrager")
+  vergunningEvents VergunningEvent[]
+  projectUpdates  ProjectUpdate[]
+  ressortplannen  Ressortplan[]         @relation("RessortplanGemaaktDoor")
+  districtsplannen Districtsplan[]      @relation("DistrictsplanGemaaktDoor")
+  auditLog        AuditLog[]
+  sessies         Sessie[]
+  magicLinks      MagicLink[]
+
+  @@index([authProvider, externalId])
+  @@map("gebruikers")
+}
+
+enum RolScope {
+  NATIONAAL
+  DISTRICT
+  RESSORT
+}
+
+/// Standaard-rollen worden geseed; nieuwe rollen kunnen later
+/// (Fase 2) toegevoegd worden via admin-UI.
+model Rol {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique // bv. 'dc', 'ressortcoordinator'
+  naam        String
+  scope       RolScope
+  beschrijving String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  permissies      RolPermissie[]
+  gebruikerRollen GebruikerRol[]
+
+  @@map("rollen")
+}
+
+model Permissie {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique // bv. 'melding.behandel', 'vergunning.goedkeur'
+  beschrijving String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  rollen RolPermissie[]
+
+  @@map("permissies")
+}
+
+model RolPermissie {
+  rolId       Int @map("rol_id")
+  permissieId Int @map("permissie_id")
+
+  rol       Rol       @relation(fields: [rolId], references: [id], onDelete: Cascade)
+  permissie Permissie @relation(fields: [permissieId], references: [id], onDelete: Cascade)
+
+  @@id([rolId, permissieId])
+  @@map("rol_permissies")
+}
+
+/// Rol-toewijzing met scope (district of ressort) en optionele einddatum
+/// (inhuur, wisseling DC, etc.).
+model GebruikerRol {
+  id          Int       @id @default(autoincrement())
+  gebruikerId String    @map("gebruiker_id")
+  rolId       Int       @map("rol_id")
+  districtId  Int?      @map("district_id")
+  ressortId   Int?      @map("ressort_id")
+  geldigVan   DateTime  @default(now()) @map("geldig_van")
+  geldigTot   DateTime? @map("geldig_tot")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  createdBy   String?   @map("created_by")
+
+  gebruiker Gebruiker @relation(fields: [gebruikerId], references: [id], onDelete: Cascade)
+  rol       Rol       @relation(fields: [rolId], references: [id])
+  district  District? @relation(fields: [districtId], references: [id])
+  ressort   Ressort?  @relation(fields: [ressortId], references: [id])
+
+  @@index([gebruikerId])
+  @@index([rolId])
+  @@index([districtId])
+  @@map("gebruiker_rollen")
+}
+
+model Sessie {
+  id           String   @id @default(cuid())
+  gebruikerId  String   @map("gebruiker_id")
+  refreshHash  String   @map("refresh_hash")
+  ip           String?
+  userAgent    String?  @map("user_agent")
+  laatsteUse   DateTime @default(now()) @map("laatste_use")
+  verlooptOp   DateTime @map("verloopt_op")
+  ingetrokken  Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  gebruiker Gebruiker @relation(fields: [gebruikerId], references: [id], onDelete: Cascade)
+
+  @@index([gebruikerId])
+  @@map("sessies")
+}
+
+model MagicLink {
+  id          String    @id @default(cuid())
+  gebruikerId String?   @map("gebruiker_id") // nullable: kan burger zonder account zijn
+  tokenHash   String    @unique @map("token_hash")
+  doel        String    // 'login', 'melding-volgen', 'verificatie'
+  context     Json?     // bv. { meldingId: 123 }
+  verlooptOp  DateTime  @map("verloopt_op")
+  gebruiktOp  DateTime? @map("gebruikt_op")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  gebruiker Gebruiker? @relation(fields: [gebruikerId], references: [id])
+
+  @@index([gebruikerId])
+  @@map("magic_links")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AUDIT LOG — onveranderbaar, vanaf dag 1
+// ═══════════════════════════════════════════════════════════════════
+
+enum AuditActie {
+  CREATE
+  UPDATE
+  DELETE
+  READ_SENSITIVE
+  LOGIN
+  LOGOUT
+  ROL_TOEGEKEND
+  ROL_INGETROKKEN
+  EXPORT
+  STATUS_WIJZIGING
+  DOCUMENT_UPLOAD
+  DOCUMENT_DOWNLOAD
+  BESLUIT_GENOMEN
+}
+
+model AuditLog {
+  id            BigInt     @id @default(autoincrement())
+  actorId       String?    @map("actor_id")
+  actie         AuditActie
+  entiteitType  String     @map("entiteit_type") // bv. 'Melding'
+  entiteitId    String     @map("entiteit_id")   // string voor flexibiliteit
+  voor          Json?      // before-state
+  na            Json?      // after-state
+  ip            String?
+  userAgent     String?    @map("user_agent")
+  context       Json?      // extra context (bv. districtId, reden)
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  actor Gebruiker? @relation(fields: [actorId], references: [id])
+
+  @@index([entiteitType, entiteitId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CATEGORIEËN — gedeeld door meldingen, vergunningen, projecten
+// ═══════════════════════════════════════════════════════════════════
+
+enum CategorieType {
+  MELDING
+  VERGUNNING
+  PROJECT
+}
+
+model Categorie {
+  id           Int           @id @default(autoincrement())
+  code         String        @unique // bv. 'MELD-WATER-DRAINAGE'
+  naam         String
+  type         CategorieType
+  parentId     Int?          @map("parent_id")
+  icoon        String?
+  actief       Boolean       @default(true)
+  volgorde     Int           @default(0)
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  parent       Categorie?    @relation("CategorieHierarchie", fields: [parentId], references: [id])
+  kinderen     Categorie[]   @relation("CategorieHierarchie")
+  meldingen    Melding[]
+  vergunningen Vergunning[]
+  projecten    Project[]
+
+  @@index([type, actief])
+  @@map("categorieen")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MELDINGEN — burgermeldingen openbare ruimte
+// ═══════════════════════════════════════════════════════════════════
+
+enum MeldingStatus {
+  NIEUW
+  IN_BEHANDELING
+  EXTRA_INFO_NODIG
+  OPGELOST
+  GESLOTEN
+  HEROPEND
+}
+
+enum Urgentie {
+  LAAG
+  MIDDEL
+  HOOG
+  CRISIS
+}
+
+model Melding {
+  id                  Int           @id @default(autoincrement())
+  ticketNummer        String        @unique @map("ticket_nummer") // mensleesbaar, bv. "MLD-2026-00001"
+  districtId          Int           @map("district_id")
+  ressortId           Int?          @map("ressort_id")
+  categorieId         Int           @map("categorie_id")
+  status              MeldingStatus @default(NIEUW)
+  urgentie            Urgentie      @default(MIDDEL)
+  titel               String
+  omschrijving        String        @db.Text
+  locatieOmschrijving String?       @map("locatie_omschrijving")
+  geom                Unsupported("geography(Point, 4326)")?
+
+  // melder kan anoniem zijn — alleen contact voor terugkoppeling
+  melderNaam     String? @map("melder_naam")
+  melderTelefoon String? @map("melder_telefoon")
+  melderEmail    String? @map("melder_email")
+  melderConsent  Boolean @default(false) @map("melder_consent") // toestemming contact
+
+  toegewezenAanId String?    @map("toegewezen_aan_id")
+  toegewezenOp    DateTime?  @map("toegewezen_op")
+  geslotenOp      DateTime?  @map("gesloten_op")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  district       District       @relation(fields: [districtId], references: [id])
+  ressort        Ressort?       @relation(fields: [ressortId], references: [id])
+  categorie      Categorie      @relation(fields: [categorieId], references: [id])
+  toegewezenAan  Gebruiker?     @relation("MeldingToegewezenAan", fields: [toegewezenAanId], references: [id])
+  bijlages       MeldingBijlage[]
+  events         MeldingEvent[]
+
+  @@index([districtId, status, createdAt(sort: Desc)])
+  @@index([ressortId, status])
+  @@index([status])
+  @@index([toegewezenAanId])
+  @@map("meldingen")
+}
+
+model MeldingBijlage {
+  id        Int      @id @default(autoincrement())
+  meldingId Int      @map("melding_id")
+  fileKey   String   @map("file_key") // S3 key
+  soort     String   // 'foto', 'video', 'document'
+  bestandsnaam String @map("bestandsnaam")
+  grootte   Int      // bytes
+  mimeType  String   @map("mime_type")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  melding Melding @relation(fields: [meldingId], references: [id], onDelete: Cascade)
+
+  @@index([meldingId])
+  @@map("melding_bijlages")
+}
+
+model MeldingEvent {
+  id        BigInt   @id @default(autoincrement())
+  meldingId Int      @map("melding_id")
+  actorId   String?  @map("actor_id")
+  type      String   // 'aangemaakt', 'status_gewijzigd', 'toegewezen', 'opmerking', etc.
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  melding Melding    @relation(fields: [meldingId], references: [id], onDelete: Cascade)
+  actor   Gebruiker? @relation(fields: [actorId], references: [id])
+
+  @@index([meldingId, createdAt])
+  @@map("melding_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VERGUNNINGEN — DC-bevoegdheden (Hinderwet, markt, evenement, etc.)
+// ═══════════════════════════════════════════════════════════════════
+
+enum VergunningStatus {
+  CONCEPT
+  INGEDIEND
+  IN_BEHANDELING
+  EXTRA_INFO_NODIG
+  GOEDGEKEURD
+  AFGEWEZEN
+  INGETROKKEN
+  BEZWAAR
+}
+
+enum AanvragerSoort {
+  BURGER
+  ONDERNEMING
+}
+
+model Vergunning {
+  id           Int              @id @default(autoincrement())
+  referentie   String           @unique // mensleesbaar, bv. "VRG-2026-WAN-00042"
+  categorieId  Int              @map("categorie_id") // type vergunning
+  status       VergunningStatus @default(CONCEPT)
+  aanvragerId  String?          @map("aanvrager_id") // null voor anonieme/publieke aanvraag
+  districtId   Int              @map("district_id")
+  titel        String
+  beschrijving String?          @db.Text
+  locatieOmschrijving String?   @map("locatie_omschrijving")
+  geom         Unsupported("geography(Point, 4326)")?
+
+  // Aanvrager-contact (verplicht voor publieke aanvragen, optioneel als
+  // aanvragerId gezet is). KKF-nummer alleen bij ONDERNEMING.
+  aanvragerSoort     AanvragerSoort? @map("aanvrager_soort")
+  aanvragerNaam      String?         @map("aanvrager_naam")
+  aanvragerTelefoon  String?         @map("aanvrager_telefoon")
+  aanvragerEmail     String?         @map("aanvrager_email")
+  aanvragerKkfNummer String?         @map("aanvrager_kkf_nummer")
+
+  ingediendOp DateTime? @map("ingediend_op")
+  beslotenOp  DateTime? @map("besloten_op")
+  besluit     String?   @db.Text
+  besluitDoorId String? @map("besluit_door_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  categorie  Categorie         @relation(fields: [categorieId], references: [id])
+  district   District          @relation(fields: [districtId], references: [id])
+  aanvrager  Gebruiker?        @relation("VergunningAanvrager", fields: [aanvragerId], references: [id])
+  documenten VergunningDocument[]
+  events     VergunningEvent[]
+
+  @@index([districtId, status])
+  @@index([aanvragerId])
+  @@index([status])
+  @@map("vergunningen")
+}
+
+model VergunningDocument {
+  id           Int      @id @default(autoincrement())
+  vergunningId Int      @map("vergunning_id")
+  fileKey      String   @map("file_key")
+  bestandsnaam String   @map("bestandsnaam")
+  grootte      Int
+  mimeType     String   @map("mime_type")
+  verplicht    Boolean  @default(false)
+  rol          String?  // bv. 'identiteit', 'bouwtekening'
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  vergunning Vergunning @relation(fields: [vergunningId], references: [id], onDelete: Cascade)
+
+  @@index([vergunningId])
+  @@map("vergunning_documenten")
+}
+
+model VergunningEvent {
+  id           BigInt   @id @default(autoincrement())
+  vergunningId Int      @map("vergunning_id")
+  actorId      String?  @map("actor_id")
+  type         String
+  payload      Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  vergunning Vergunning @relation(fields: [vergunningId], references: [id], onDelete: Cascade)
+  actor      Gebruiker? @relation(fields: [actorId], references: [id])
+
+  @@index([vergunningId, createdAt])
+  @@map("vergunning_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PROJECTEN — districtsprojecten (wegen, scholen, sport, etc.)
+// ═══════════════════════════════════════════════════════════════════
+
+enum ProjectStatus {
+  IDEE
+  GOEDGEKEURD
+  BUDGET_AANGEVRAAGD
+  GESTART
+  VERTRAAGD
+  AFGEROND
+  GEEVALUEERD
+  GEANNULEERD
+}
+
+model Project {
+  id               Int           @id @default(autoincrement())
+  referentie       String        @unique
+  titel            String
+  beschrijving     String?       @db.Text
+  status           ProjectStatus @default(IDEE)
+  categorieId      Int?          @map("categorie_id")
+  districtId       Int           @map("district_id")
+  ressortId        Int?          @map("ressort_id")
+  budgetIndicatief Decimal?      @map("budget_indicatief") @db.Decimal(14, 2)
+  budgetWerkelijk  Decimal?      @map("budget_werkelijk") @db.Decimal(14, 2)
+  valuta           String        @default("SRD")
+  startDatum       DateTime?     @map("start_datum") @db.Date
+  eindDatumPlan    DateTime?     @map("eind_datum_plan") @db.Date
+  eindDatumWerkelijk DateTime?   @map("eind_datum_werkelijk") @db.Date
+  contractor       String?
+  geom             Unsupported("geography(Point, 4326)")?
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  district  District         @relation(fields: [districtId], references: [id])
+  ressort   Ressort?         @relation(fields: [ressortId], references: [id])
+  categorie Categorie?       @relation(fields: [categorieId], references: [id])
+  updates   ProjectUpdate[]
+  fondsuitgaven DistrictsfondsUitgave[]
+
+  @@index([districtId, status])
+  @@index([ressortId])
+  @@map("projecten")
+}
+
+model ProjectUpdate {
+  id        Int      @id @default(autoincrement())
+  projectId Int      @map("project_id")
+  actorId   String   @map("actor_id")
+  body      String   @db.Text
+  fotoKeys  String[] @map("foto_keys")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   Gebruiker @relation(fields: [actorId], references: [id])
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@map("project_updates")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RESSORTPLANNEN & DISTRICTSPLANNEN — kern van decentralisatie (WRO)
+// ═══════════════════════════════════════════════════════════════════
+
+enum PlanStatus {
+  CONCEPT
+  TER_GOEDKEURING_RR     // bij ressortplan
+  TER_GOEDKEURING_DR     // bij districtsplan
+  TER_GOEDKEURING_DC
+  TER_GOEDKEURING_RO     // ministerie
+  GOEDGEKEURD
+  AFGEWEZEN
+  HERZIENING_NODIG
+  GEARCHIVEERD
+}
+
+/// Ressortplan — opgesteld door ressortcoördinator + RR, aggregeert
+/// lokale prioriteiten als input voor districtsplan.
+model Ressortplan {
+  id            Int        @id @default(autoincrement())
+  ressortId     Int        @map("ressort_id")
+  jaar          Int
+  versie        Int        @default(1)
+  status        PlanStatus @default(CONCEPT)
+  titel         String
+  inleiding     String?    @db.Text
+  gemaaktDoorId String     @map("gemaakt_door_id")
+  goedgekeurdOp DateTime?  @map("goedgekeurd_op")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  ressort      Ressort                    @relation(fields: [ressortId], references: [id])
+  gemaaktDoor  Gebruiker                  @relation("RessortplanGemaaktDoor", fields: [gemaaktDoorId], references: [id])
+  prioriteiten RessortplanPrioriteit[]
+
+  @@unique([ressortId, jaar, versie])
+  @@index([ressortId, jaar])
+  @@map("ressortplannen")
+}
+
+model RessortplanPrioriteit {
+  id             Int      @id @default(autoincrement())
+  ressortplanId  Int      @map("ressortplan_id")
+  volgorde       Int      @default(0)
+  titel          String
+  onderbouwing   String   @db.Text
+  urgentie       Urgentie @default(MIDDEL)
+  kostenraming   Decimal? @db.Decimal(14, 2)
+  valuta         String   @default("SRD")
+  doelgroep      String?
+  verwachteImpact String? @map("verwachte_impact") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  ressortplan Ressortplan @relation(fields: [ressortplanId], references: [id], onDelete: Cascade)
+
+  @@index([ressortplanId])
+  @@map("ressortplan_prioriteiten")
+}
+
+/// Districtsplan — geaggregeerd uit ressortplannen door DC + DR,
+/// koppeling met districtsbegroting (Fase 2).
+model Districtsplan {
+  id            Int        @id @default(autoincrement())
+  districtId    Int        @map("district_id")
+  jaar          Int
+  versie        Int        @default(1)
+  status        PlanStatus @default(CONCEPT)
+  titel         String
+  inleiding     String?    @db.Text
+  gemaaktDoorId String     @map("gemaakt_door_id")
+  goedgekeurdOp DateTime?  @map("goedgekeurd_op")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  district     District                  @relation(fields: [districtId], references: [id])
+  gemaaktDoor  Gebruiker                 @relation("DistrictsplanGemaaktDoor", fields: [gemaaktDoorId], references: [id])
+  prioriteiten DistrictsplanPrioriteit[]
+
+  @@unique([districtId, jaar, versie])
+  @@index([districtId, jaar])
+  @@map("districtsplannen")
+}
+
+model DistrictsplanPrioriteit {
+  id              Int      @id @default(autoincrement())
+  districtsplanId Int      @map("districtsplan_id")
+  volgorde        Int      @default(0)
+  titel           String
+  onderbouwing    String   @db.Text
+  urgentie        Urgentie @default(MIDDEL)
+  kostenraming    Decimal? @db.Decimal(14, 2)
+  valuta          String   @default("SRD")
+  // optionele koppelingen aan onderliggende ressortprioriteiten (in JSON
+  // voor flexibiliteit; harde FK in Fase 2 als use case helder is)
+  bronnen         Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  districtsplan Districtsplan @relation(fields: [districtsplanId], references: [id], onDelete: Cascade)
+
+  @@index([districtsplanId])
+  @@map("districtsplan_prioriteiten")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DISTRICTSFONDS — financiële decentralisatie (Wet Fid art. 40)
+// ═══════════════════════════════════════════════════════════════════
+// Schema vanaf dag 1 aanwezig; module/UI volgt in Fase 2 (politiek
+// gevoelig, vereist auditor-betrokkenheid).
+
+model Districtsfonds {
+  id          Int      @id @default(autoincrement())
+  districtId  Int      @map("district_id")
+  jaar        Int
+  totaalBudget Decimal @map("totaal_budget") @db.Decimal(14, 2)
+  valuta      String   @default("SRD")
+  goedgekeurd Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  district  District                  @relation(fields: [districtId], references: [id])
+  uitgaven  DistrictsfondsUitgave[]
+
+  @@unique([districtId, jaar])
+  @@map("districtsfondsen")
+}
+
+model DistrictsfondsUitgave {
+  id              Int      @id @default(autoincrement())
+  districtsfondsId Int     @map("districtsfonds_id")
+  projectId       Int?     @map("project_id")
+  bedrag          Decimal  @db.Decimal(14, 2)
+  beschrijving    String
+  geboektOp       DateTime @default(now()) @map("geboekt_op")
+  geboektDoorId   String?  @map("geboekt_door_id")
+
+  districtsfonds Districtsfonds @relation(fields: [districtsfondsId], references: [id], onDelete: Cascade)
+  project        Project?       @relation(fields: [projectId], references: [id])
+
+  @@index([districtsfondsId])
+  @@index([projectId])
+  @@map("districtsfonds_uitgaven")
+}

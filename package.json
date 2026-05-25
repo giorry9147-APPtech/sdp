@@ -1,0 +1,26 @@
+{
+  "name": "sdp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Suriname Decentralisatie Platform — monorepo root",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d postgres",
+    "services:up": "docker compose up -d",
+    "services:down": "docker compose down",
+    "db:migrate": "pnpm --filter @sdp/api prisma migrate dev",
+    "db:seed": "pnpm --filter @sdp/api prisma db seed",
+    "db:studio": "pnpm --filter @sdp/api prisma studio"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

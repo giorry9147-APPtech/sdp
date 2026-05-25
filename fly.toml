@@ -1,0 +1,60 @@
+# Fly.io configuratie — SDP API backend
+# Deploy: fly deploy (vanuit repo-root)
+#
+# Vereiste secrets (zet eenmalig via `fly secrets set KEY=value`):
+#   DATABASE_URL    Neon connection string met sslmode=require
+#                   bv. postgresql://user:pass@ep-xxx.eu-central-1.aws.neon.tech/sdp?sslmode=require
+#   JWT_SECRET      Genereer: openssl rand -base64 48
+#   WEB_ORIGIN      https://sdp-demo.vercel.app  (komma-gescheiden voor meerdere)
+#
+# Regio: GRU (São Paulo) — dichtbij Suriname, lagere latency dan EU/US.
+
+app = "sdp-suriname-api"
+primary_region = "gru"
+
+[build]
+  dockerfile = "apps/api/Dockerfile"
+  dockerignore = ".dockerignore"
+
+# Release: bij elke deploy schema synchroniseren met Neon DB.
+# Idempotent — kan veilig herhaald worden.
+[deploy]
+  release_command = "npx prisma db push --skip-generate --accept-data-loss"
+
+[env]
+  NODE_ENV = "production"
+  API_PORT = "4000"
+  AUTH_PROVIDER = "email-password"
+  JWT_ACCESS_TTL = "15m"
+  JWT_REFRESH_TTL = "7d"
+  # SMTP voor demo niet ingesteld — notificaties skip in MVP
+  SMTP_FROM = "SDP Demo <demo@sdp.local>"
+  SMTP_HOST = ""
+  SMTP_PORT = "587"
+  # MinIO/S3 niet nodig voor demo (file-upload feature komt later)
+  S3_ENDPOINT = ""
+  S3_BUCKET = ""
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0      # 0 = mag stoppen bij geen verkeer (kosten omlaag, cold start ~5s)
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[experimental]
+  auto_rollback = true
