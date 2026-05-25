@@ -4,11 +4,11 @@
   "private": true,
   "description": "SDP API — NestJS backend (e-Suriname compatible)",
   "scripts": {
-    "build": "nest build",
+    "build": "prisma generate && nest build",
     "dev": "nest start --watch",
     "start": "node dist/main",
     "lint": "eslint \"src/**/*.ts\"",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "prisma generate && tsc --noEmit",
     "test": "jest",
     "prisma": "prisma",
     "prisma:generate": "prisma generate",
