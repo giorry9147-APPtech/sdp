@@ -1,11 +1,17 @@
-# SDP API — multi-stage productie-build
-# Geoptimaliseerd voor Haven-Suriname (Kubernetes-compatible).
+# SDP API — single-stage productie-image (runtime via tsx)
+# Geen tsc build-stap nodig — tsx transpileert on-import (esbuild).
+# Cold start +1-2s, geen build-bugs, deterministisch over OS/container.
 
-# ─── Stage 1: build ───────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim
 
-# Argon2 + Prisma vereisen build tools
-RUN apk add --no-cache python3 make g++ openssl
+# Argon2 + Prisma vereisen build tools (alleen tijdens install, kunnen erin blijven
+# voor demo-image; voor productie aparte multi-stage indien gewenst).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ openssl ca-certificates tini wget \
+  && rm -rf /var/lib/apt/lists/*
+
+# Niet-root user
+RUN groupadd -g 1001 -r sdp && useradd -u 1001 -r -g sdp sdp
 
 WORKDIR /repo
 
@@ -14,29 +20,21 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 
-RUN corepack enable pnpm && pnpm install --frozen-lockfile --filter @sdp/api...
+RUN corepack enable pnpm && pnpm install --frozen-lockfile
 
+# Source code
 COPY apps/api ./apps/api
 WORKDIR /repo/apps/api
 
+# Prisma client genereren (vereist door @prisma/client imports in src)
 RUN pnpm prisma generate
-RUN pnpm build
 
-# ─── Stage 2: runtime ─────────────────────────────────────────
-FROM node:20-alpine AS runtime
+# ts-node globaal: gebruikt echte tsc voor full decorator metadata (NestJS DI vereist dat).
+# tsx/esbuild emit-metadata is incompleet → DI faalt op sommige services.
+RUN npm install -g ts-node@10 typescript@5.4 tsconfig-paths@4
 
-RUN apk add --no-cache openssl tini
-
-# Niet-root user
-RUN addgroup -g 1001 -S sdp && adduser -u 1001 -S sdp -G sdp
-
-WORKDIR /app
-
-# Alleen wat nodig is in runtime
-COPY --from=builder --chown=sdp:sdp /repo/apps/api/package.json ./
-COPY --from=builder --chown=sdp:sdp /repo/apps/api/dist ./dist
-COPY --from=builder --chown=sdp:sdp /repo/apps/api/prisma ./prisma
-COPY --from=builder --chown=sdp:sdp /repo/node_modules ./node_modules
+# Permissies voor non-root user
+RUN chown -R sdp:sdp /repo
 
 USER sdp
 
@@ -45,8 +43,8 @@ ENV API_PORT=4000
 
 EXPOSE 4000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:4000/api/docs || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:4000/api/health || exit 1
 
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "dist/main.js"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["ts-node", "--transpile-only", "-r", "tsconfig-paths/register", "src/main.ts"]

@@ -56,29 +56,38 @@ async function bootstrap() {
   const prisma = app.get(PrismaService);
   app.useGlobalInterceptors(new AuditInterceptor(prisma));
 
-  // OpenAPI spec (e-Suriname compatibel — gepubliceerd voor S-Road)
-  const swagger = new DocumentBuilder()
-    .setTitle('SDP API')
-    .setDescription(
-      'Suriname Decentralisatie Platform — REST API. ' +
-      'Ontworpen voor S-Road interoperabiliteit (e-Suriname spoor).',
-    )
-    .setVersion('0.1.0')
-    .addBearerAuth()
-    .addTag('publiek', 'Endpoints zonder authenticatie (burger-meldpunt)')
-    .addTag('auth', 'Authenticatie & sessies')
-    .addTag('districten', 'Bestuurlijke structuur — districten')
-    .addTag('ressorten', 'Bestuurlijke structuur — ressorten')
-    .addTag('meldingen', 'Burgermeldingen openbare ruimte')
-    .addTag('vergunningen', 'Vergunningen (Hinderwet, markt, evenement, etc.)')
-    .addTag('projecten', 'Districtsprojecten')
-    .addTag('plannen', 'Ressortplannen & districtsplannen (decentralisatie)')
-    .addTag('dashboards', 'DC- en RO-dashboards')
-    .build();
-  const doc = SwaggerModule.createDocument(app, swagger);
-  SwaggerModule.setup('api/docs', app, doc, {
-    swaggerOptions: { persistAuthorization: true },
-  });
+  // OpenAPI spec (e-Suriname compatibel — gepubliceerd voor S-Road).
+  // Swagger introspection faalt onder tsx (esbuild emit niet alle method-parameter
+  // metadata zoals tsc dat doet). Wrappen in try/catch zodat MVP-deploy door kan
+  // zonder /api/docs. Voor productie: ts-node of nest build met tsc-pipeline gebruiken.
+  try {
+    const swagger = new DocumentBuilder()
+      .setTitle('SDP API')
+      .setDescription(
+        'Suriname Decentralisatie Platform — REST API. ' +
+        'Ontworpen voor S-Road interoperabiliteit (e-Suriname spoor).',
+      )
+      .setVersion('0.1.0')
+      .addBearerAuth()
+      .addTag('publiek', 'Endpoints zonder authenticatie (burger-meldpunt)')
+      .addTag('auth', 'Authenticatie & sessies')
+      .addTag('districten', 'Bestuurlijke structuur — districten')
+      .addTag('ressorten', 'Bestuurlijke structuur — ressorten')
+      .addTag('meldingen', 'Burgermeldingen openbare ruimte')
+      .addTag('vergunningen', 'Vergunningen (Hinderwet, markt, evenement, etc.)')
+      .addTag('projecten', 'Districtsprojecten')
+      .addTag('plannen', 'Ressortplannen & districtsplannen (decentralisatie)')
+      .addTag('dashboards', 'DC- en RO-dashboards')
+      .build();
+    const doc = SwaggerModule.createDocument(app, swagger);
+    SwaggerModule.setup('api/docs', app, doc, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  } catch (err) {
+    new Logger('Bootstrap').warn(
+      `Swagger setup overgeslagen (${(err as Error).message}). API blijft werken zonder /api/docs.`,
+    );
+  }
 
   const port = Number(process.env.API_PORT ?? 4000);
   await app.listen(port);

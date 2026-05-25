@@ -7,6 +7,7 @@
     "build": "prisma generate && nest build",
     "dev": "nest start --watch",
     "start": "node dist/main",
+    "start:tsx": "tsx src/main.ts",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "prisma generate && tsc --noEmit",
     "test": "jest",
@@ -36,6 +37,7 @@
     "nanoid": "^5.0.6",
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
+    "tsx": "^4.7.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -54,7 +56,6 @@
     "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "tsx": "^4.7.0",
     "typescript": "^5.4.0"
   }
 }

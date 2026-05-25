@@ -64,3 +64,4 @@ mailpit-data/
 
 # Fly
 .fly/
+.vercel

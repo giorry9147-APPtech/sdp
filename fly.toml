@@ -19,7 +19,7 @@ primary_region = "gru"
 # Release: bij elke deploy schema synchroniseren met Neon DB.
 # Idempotent — kan veilig herhaald worden.
 [deploy]
-  release_command = "npx prisma db push --skip-generate --accept-data-loss"
+  release_command = "npx prisma@5.22.0 db push --skip-generate --accept-data-loss"
 
 [env]
   NODE_ENV = "production"
