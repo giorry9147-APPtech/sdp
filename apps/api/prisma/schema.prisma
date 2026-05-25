@@ -679,6 +679,12 @@ model Districtsfonds {
   @@map("districtsfondsen")
 }
 
+enum DistrictsfondsUitgaveStatus {
+  AANGEVRAAGD
+  GOEDGEKEURD
+  AFGEKEURD
+}
+
 model DistrictsfondsUitgave {
   id              Int      @id @default(autoincrement())
   districtsfondsId Int     @map("districtsfonds_id")
@@ -688,10 +694,19 @@ model DistrictsfondsUitgave {
   geboektOp       DateTime @default(now()) @map("geboekt_op")
   geboektDoorId   String?  @map("geboekt_door_id")
 
+  // 4-ogen approval (Fase 2, sprint 21-24)
+  // Default = GOEDGEKEURD voor backwards-compat met seed data; nieuwe uitgaven
+  // worden expliciet AANGEVRAAGD aangemaakt door API.
+  status            DistrictsfondsUitgaveStatus @default(GOEDGEKEURD)
+  goedgekeurdDoorId String?    @map("goedgekeurd_door_id")
+  goedgekeurdOp     DateTime?  @map("goedgekeurd_op")
+  afkeurReden       String?    @map("afkeur_reden")
+
   districtsfonds Districtsfonds @relation(fields: [districtsfondsId], references: [id], onDelete: Cascade)
   project        Project?       @relation(fields: [projectId], references: [id])
 
   @@index([districtsfondsId])
   @@index([projectId])
+  @@index([status])
   @@map("districtsfonds_uitgaven")
 }

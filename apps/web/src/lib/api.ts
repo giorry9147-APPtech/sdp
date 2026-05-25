@@ -553,9 +553,48 @@ export const api = {
         headers: { Authorization: `Bearer ${token}` },
       },
     ),
+
+  fondsBeslisUitgave: (
+    uitgaveId: number,
+    payload: { actie: 'GOEDKEUREN' | 'AFKEUREN'; reden?: string },
+    token: string,
+  ) =>
+    request<UitgaveLijst>(`/financien/uitgaven/${uitgaveId}/beslissing`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  fondsExportCsvUrl: (fondsId: number, token: string) => {
+    // CSV-export gebeurt via een directe <a download> link in de UI.
+    // Browser kan niet de Authorization header zetten op een gewone link, dus
+    // we geven de URL én een fetch-functie zodat de caller met blob() kan
+    // downloaden. Voor demo: download via fetch + blob is veilig + werkt cross-origin.
+    return {
+      url: `${BASE}/financien/districtsfondsen/${fondsId}/audit/csv`,
+      fetch: async (filename: string) => {
+        const res = await fetch(
+          `${BASE}/financien/districtsfondsen/${fondsId}/audit/csv`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!res.ok) throw new Error(`CSV-download mislukt: HTTP ${res.status}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      },
+    };
+  },
 };
 
 // ─── Financiën types ─────────────────────────────────────────────
+export type UitgaveStatus = 'AANGEVRAAGD' | 'GOEDGEKEURD' | 'AFGEKEURD';
+
 export type FondsLijst = {
   id: number;
   districtId: number;
@@ -566,11 +605,13 @@ export type FondsLijst = {
   besteed: number;
   restant: number;
   pctBesteed: number;
+  uitgavenInAfwachting: number;
   district: { id: number; code: string; naam: string };
   _count: { uitgaven: number };
 };
 
 export type FondsDetail = FondsLijst & {
+  aangevraagdBedrag: number;
   verdeling: { projecten: number; operationeel: number };
   perProject: Array<{
     project: { id: number; referentie: string; titel: string; status: ProjectStatus } | null;
@@ -581,6 +622,29 @@ export type FondsDetail = FondsLijst & {
     bedrag: string | number;
     beschrijving: string;
     geboektOp: string;
+    status: UitgaveStatus;
+    geboektDoorId: string | null;
+    goedgekeurdDoorId: string | null;
+    goedgekeurdOp: string | null;
+    afkeurReden: string | null;
     project?: { id: number; referentie: string; titel: string; status: ProjectStatus } | null;
   }>;
+};
+
+export type UitgaveLijst = {
+  id: number;
+  bedrag: string | number;
+  beschrijving: string;
+  geboektOp: string;
+  status: UitgaveStatus;
+  geboektDoorId: string | null;
+  goedgekeurdDoorId: string | null;
+  goedgekeurdOp: string | null;
+  afkeurReden: string | null;
+  districtsfonds?: {
+    id: number;
+    jaar: number;
+    district: { id: number; code: string; naam: string };
+  };
+  project?: { id: number; referentie: string; titel: string } | null;
 };

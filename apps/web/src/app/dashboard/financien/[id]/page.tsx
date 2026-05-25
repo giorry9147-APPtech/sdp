@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useDashboard } from '@/lib/dashboard-context';
-import { api, type FondsDetail, type ProjectLijst } from '@/lib/api';
+import { api, type FondsDetail, type ProjectLijst, type UitgaveStatus } from '@/lib/api';
 import { srdFormat } from '@/lib/status-stijl';
 
 export default function FondsDetailPage({ params }: { params: { id: string } }) {
@@ -13,12 +13,16 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
   const [projecten, setProjecten] = useState<ProjectLijst[]>([]);
   const [fout, setFout] = useState<string | null>(null);
 
-  // Boek-form
+  // Aanvraag-form
   const [bedrag, setBedrag] = useState<number | ''>('');
   const [beschrijving, setBeschrijving] = useState('');
   const [projectId, setProjectId] = useState<number | ''>('');
   const [bezig, setBezig] = useState(false);
   const [waarschuwing, setWaarschuwing] = useState<string | null>(null);
+
+  // Beslissings-UI: per-rij reden bij afkeuring
+  const [redenPerId, setRedenPerId] = useState<Record<number, string>>({});
+  const [beslissingBezig, setBeslissingBezig] = useState<number | null>(null);
 
   function herlaad() {
     api
@@ -61,7 +65,9 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
         sessie.accessToken,
       );
       if (r.budgetOverschrijding) {
-        setWaarschuwing('⚠️ Deze uitgave veroorzaakt budget-overschrijding. Audit-trail vastgelegd.');
+        setWaarschuwing(
+          '⚠️ Deze aanvraag zou bij goedkeuring het budget overschrijden. Audit-trail vastgelegd.',
+        );
       }
       setBedrag('');
       setBeschrijving('');
@@ -71,6 +77,39 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
       setFout(e instanceof Error ? e.message : 'fout');
     } finally {
       setBezig(false);
+    }
+  }
+
+  async function beslis(uitgaveId: number, actie: 'GOEDKEUREN' | 'AFKEUREN') {
+    setBeslissingBezig(uitgaveId);
+    setFout(null);
+    try {
+      const reden = actie === 'AFKEUREN' ? (redenPerId[uitgaveId] ?? '').trim() : undefined;
+      if (actie === 'AFKEUREN' && (!reden || reden.length < 3)) {
+        setFout('Reden van afkeuring is verplicht (min. 3 tekens)');
+        return;
+      }
+      await api.fondsBeslisUitgave(uitgaveId, { actie, reden }, sessie.accessToken);
+      setRedenPerId((r) => {
+        const next = { ...r };
+        delete next[uitgaveId];
+        return next;
+      });
+      herlaad();
+    } catch (e) {
+      setFout(e instanceof Error ? e.message : 'fout');
+    } finally {
+      setBeslissingBezig(null);
+    }
+  }
+
+  async function downloadCsv() {
+    if (!f) return;
+    try {
+      const dl = api.fondsExportCsvUrl(id, sessie.accessToken);
+      await dl.fetch(`districtsfonds-${f.district.code}-${f.jaar}-grootboek.csv`);
+    } catch (e) {
+      setFout(e instanceof Error ? e.message : 'fout');
     }
   }
 
@@ -107,11 +146,20 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
             </p>
             <h1 className="mt-1 text-2xl font-bold">{srdFormat(budget)} budget</h1>
           </div>
-          {f.goedgekeurd && (
-            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
-              ✓ Goedgekeurd
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {f.goedgekeurd && (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                ✓ Goedgekeurd
+              </span>
+            )}
+            <button
+              onClick={downloadCsv}
+              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+              title="Download grootboek als CSV voor CLAD/audit"
+            >
+              ⬇ CSV (audit)
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 h-3 w-full rounded-full bg-gray-200">
@@ -123,13 +171,13 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
           />
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+        <div className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
           <div>
             <p className="text-xs text-gray-500">Totaal</p>
             <p className="text-xl font-bold">{srdFormat(budget)}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">Besteed</p>
+            <p className="text-xs text-gray-500">Besteed (goedgekeurd)</p>
             <p className="text-xl font-bold">{srdFormat(f.besteed)}</p>
             <p className="text-xs text-gray-500">{pct}%</p>
           </div>
@@ -137,6 +185,15 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
             <p className="text-xs text-gray-500">Restant</p>
             <p className={`text-xl font-bold ${f.restant < 0 ? 'text-red-600' : 'text-sdp-groen'}`}>
               {srdFormat(f.restant)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">In afwachting</p>
+            <p className={`text-xl font-bold ${f.uitgavenInAfwachting > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+              {srdFormat(f.aangevraagdBedrag)}
+            </p>
+            <p className="text-xs text-gray-500">
+              {f.uitgavenInAfwachting} aanvragen
             </p>
           </div>
         </div>
@@ -186,10 +243,15 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
         </div>
       </section>
 
-      {/* Boek-uitgave form */}
+      {/* Aanvraag-form (uitgave wordt AANGEVRAAGD; iemand met fonds.goedkeur moet 'm goedkeuren) */}
       {heeft('fonds.boek') && (
         <form onSubmit={boek} className="space-y-3 rounded-lg border-2 border-sdp-groen/30 bg-white p-5 shadow-sm">
-          <h2 className="font-semibold">Uitgave boeken</h2>
+          <h2 className="font-semibold">Uitgave aanvragen</h2>
+          <p className="text-xs text-gray-600">
+            Wacht na indiening op goedkeuring door iemand met de rol DC of
+            Directeur Decentralisatie (4-ogen-principe). Pas na goedkeuring
+            telt deze uitgave mee in het besteed-totaal.
+          </p>
           {waarschuwing && (
             <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
               {waarschuwing}
@@ -242,10 +304,83 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
             disabled={bezig || !bedrag || beschrijving.length < 3}
             className="rounded bg-sdp-groen px-5 py-2 text-sm font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-50"
           >
-            Boek uitgave
+            Aanvraag indienen
           </button>
         </form>
       )}
+
+      {/* Wacht op goedkeuring — alleen voor fonds.goedkeur (DC, directeur) */}
+      {heeft('fonds.goedkeur') &&
+        f.uitgaven.some((u) => u.status === 'AANGEVRAAGD') && (
+          <section className="space-y-3 rounded-lg border-2 border-amber-300 bg-amber-50 p-5 shadow-sm">
+            <header className="flex items-baseline justify-between gap-3">
+              <h2 className="font-semibold text-amber-900">
+                Wacht op jouw goedkeuring ({f.uitgavenInAfwachting})
+              </h2>
+              <span className="text-xs text-amber-800">
+                4-ogen: je mag niet je eigen aanvraag goedkeuren
+              </span>
+            </header>
+            <ul className="space-y-3">
+              {f.uitgaven
+                .filter((u) => u.status === 'AANGEVRAAGD')
+                .map((u) => {
+                  const isEigen = u.geboektDoorId === sessie.user.id;
+                  return (
+                    <li
+                      key={u.id}
+                      className="rounded border border-amber-200 bg-white p-3"
+                    >
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <div>
+                          <p className="font-medium">{u.beschrijving}</p>
+                          <p className="text-xs text-gray-500">
+                            Aangevraagd{' '}
+                            {new Date(u.geboektOp).toLocaleDateString('nl-NL')}
+                            {u.project ? ` · ${u.project.referentie} ${u.project.titel}` : ' · operationeel'}
+                          </p>
+                        </div>
+                        <span className="font-mono text-lg font-bold">
+                          {srdFormat(Number(u.bedrag))}
+                        </span>
+                      </div>
+                      {isEigen ? (
+                        <p className="mt-2 text-xs text-gray-500 italic">
+                          Eigen aanvraag — kan niet door jou beslist worden.
+                        </p>
+                      ) : (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <button
+                            onClick={() => beslis(u.id, 'GOEDKEUREN')}
+                            disabled={beslissingBezig === u.id}
+                            className="rounded bg-sdp-groen px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            ✓ Goedkeuren
+                          </button>
+                          <input
+                            type="text"
+                            placeholder="Reden bij afkeuring (verplicht)"
+                            value={redenPerId[u.id] ?? ''}
+                            onChange={(e) =>
+                              setRedenPerId((r) => ({ ...r, [u.id]: e.target.value }))
+                            }
+                            className="flex-1 rounded border-gray-300 text-xs"
+                          />
+                          <button
+                            onClick={() => beslis(u.id, 'AFKEUREN')}
+                            disabled={beslissingBezig === u.id}
+                            className="rounded border border-red-400 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            ✗ Afkeuren
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+            </ul>
+          </section>
+        )}
 
       {fout && (
         <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
@@ -253,7 +388,7 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
         </div>
       )}
 
-      {/* Uitgaven-grootboek */}
+      {/* Uitgaven-grootboek (alle statussen) */}
       <section className="rounded-lg bg-white p-6 shadow-sm">
         <h2 className="mb-4 font-semibold">Grootboek ({f.uitgaven.length} regels)</h2>
         {f.uitgaven.length === 0 ? (
@@ -264,6 +399,7 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
               <thead className="border-b text-left text-xs uppercase text-gray-500">
                 <tr>
                   <th className="py-2 pr-3">Geboekt op</th>
+                  <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Beschrijving</th>
                   <th className="py-2 pr-3">Project</th>
                   <th className="py-2 pr-3 text-right">Bedrag</th>
@@ -271,12 +407,27 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
               </thead>
               <tbody>
                 {f.uitgaven.map((u) => (
-                  <tr key={u.id} className="border-b last:border-0">
-                    <td className="py-2 pr-3 text-xs text-gray-600">
+                  <tr
+                    key={u.id}
+                    className={`border-b last:border-0 ${
+                      u.status === 'AFGEKEURD' ? 'opacity-50' : ''
+                    }`}
+                  >
+                    <td className="py-2 pr-3 align-top text-xs text-gray-600">
                       {new Date(u.geboektOp).toLocaleDateString('nl-NL')}
                     </td>
-                    <td className="py-2 pr-3">{u.beschrijving}</td>
-                    <td className="py-2 pr-3">
+                    <td className="py-2 pr-3 align-top">
+                      <StatusBadge status={u.status} />
+                    </td>
+                    <td className="py-2 pr-3 align-top">
+                      {u.beschrijving}
+                      {u.status === 'AFGEKEURD' && u.afkeurReden && (
+                        <p className="mt-0.5 text-xs italic text-red-700">
+                          afgekeurd: {u.afkeurReden}
+                        </p>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 align-top">
                       {u.project ? (
                         <Link
                           href={`/dashboard/projecten/${u.project.id}`}
@@ -288,7 +439,11 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
                         <span className="text-xs text-gray-400">operationeel</span>
                       )}
                     </td>
-                    <td className="py-2 pr-3 text-right font-mono font-semibold">
+                    <td
+                      className={`py-2 pr-3 align-top text-right font-mono font-semibold ${
+                        u.status === 'GOEDGEKEURD' ? '' : 'text-gray-400'
+                      }`}
+                    >
                       {srdFormat(Number(u.bedrag))}
                     </td>
                   </tr>
@@ -296,8 +451,8 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
               </tbody>
               <tfoot>
                 <tr className="border-t-2 font-semibold">
-                  <td colSpan={3} className="py-3 pr-3 text-right">
-                    Totaal:
+                  <td colSpan={4} className="py-3 pr-3 text-right">
+                    Totaal goedgekeurd:
                   </td>
                   <td className="py-3 pr-3 text-right font-mono">
                     {srdFormat(f.besteed)}
@@ -309,6 +464,24 @@ export default function FondsDetailPage({ params }: { params: { id: string } }) 
         )}
       </section>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: UitgaveStatus }) {
+  const stijl: Record<UitgaveStatus, string> = {
+    AANGEVRAAGD: 'bg-amber-100 text-amber-800',
+    GOEDGEKEURD: 'bg-emerald-100 text-emerald-800',
+    AFGEKEURD: 'bg-red-100 text-red-800',
+  };
+  const label: Record<UitgaveStatus, string> = {
+    AANGEVRAAGD: 'wacht',
+    GOEDGEKEURD: '✓ goedgekeurd',
+    AFGEKEURD: '✗ afgekeurd',
+  };
+  return (
+    <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${stijl[status]}`}>
+      {label[status]}
+    </span>
   );
 }
 
