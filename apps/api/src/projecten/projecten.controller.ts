@@ -114,15 +114,22 @@ export class ProjectenController {
   @Auth('project.read.district', 'dashboard.nationaal')
   @ApiOperation({ summary: 'Lijst projecten per district' })
   @ApiQuery({ name: 'status', required: false, enum: ProjectStatus })
+  @ApiQuery({ name: 'subregioId', required: false, description: 'Filter op DC-cluster' })
   async lijst(
     @Query('districtId', ParseIntPipe) districtId: number,
     @Query('status') status?: ProjectStatus,
+    @Query('subregioId') subregioId?: string,
   ) {
     return this.prisma.project.findMany({
-      where: { districtId, status },
+      where: {
+        districtId,
+        status,
+        ...(subregioId ? { subregioId: Number(subregioId) } : {}),
+      },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       include: {
         ressort: { select: { id: true, naam: true } },
+        subregio: { select: { id: true, code: true, naam: true } },
         categorie: { select: { naam: true } },
         _count: { select: { updates: true } },
       },

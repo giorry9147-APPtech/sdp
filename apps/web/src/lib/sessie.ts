@@ -19,6 +19,9 @@ export type Sessie = {
       scope: 'NATIONAAL' | 'DISTRICT' | 'RESSORT';
       districtId?: number;
       ressortId?: number;
+      subregioId?: number;
+      subregioCode?: string;
+      subregioNaam?: string;
     }>;
     permissies: string[];
   };

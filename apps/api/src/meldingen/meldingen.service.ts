@@ -117,13 +117,22 @@ export class MeldingenService {
     return m;
   }
 
-  /** Voor DC/secretaris — lijst meldingen in eigen district. */
-  async lijstVoorDistrict(districtId: number, filter: { status?: MeldingStatus }) {
+  /** Voor DC/secretaris — lijst meldingen in eigen district, optioneel
+   *  gefilterd op DC-subregio (cluster van ressorten). */
+  async lijstVoorDistrict(
+    districtId: number,
+    filter: { status?: MeldingStatus; subregioId?: number },
+  ) {
     return this.prisma.melding.findMany({
-      where: { districtId, status: filter.status },
+      where: {
+        districtId,
+        status: filter.status,
+        ...(filter.subregioId ? { subregioId: filter.subregioId } : {}),
+      },
       orderBy: [{ urgentie: 'desc' }, { createdAt: 'desc' }],
       include: {
         ressort: { select: { id: true, naam: true } },
+        subregio: { select: { id: true, code: true, naam: true } },
         categorie: { select: { id: true, naam: true } },
         toegewezenAan: { select: { id: true, naam: true } },
         _count: { select: { bijlages: true, events: true } },

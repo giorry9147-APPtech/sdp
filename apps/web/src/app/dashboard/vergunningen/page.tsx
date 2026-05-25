@@ -20,7 +20,7 @@ const FILTERS: Array<{ label: string; status?: Status }> = [
 ];
 
 export default function VergunningenLijstPage() {
-  const { sessie, activeDistrictId } = useDashboard();
+  const { sessie, activeDistrictId, effectiefSubregioId } = useDashboard();
   const [filter, setFilter] = useState<Status | undefined>('INGEDIEND');
   const [lijst, setLijst] = useState<Vergunning[]>([]);
   const [fout, setFout] = useState<string | null>(null);
@@ -31,11 +31,14 @@ export default function VergunningenLijstPage() {
     setLaden(true);
     setFout(null);
     api
-      .vergunningLijst(activeDistrictId, sessie.accessToken, filter)
+      .vergunningLijst(activeDistrictId, sessie.accessToken, {
+        status: filter,
+        subregioId: effectiefSubregioId,
+      })
       .then(setLijst)
       .catch((e) => setFout(e instanceof Error ? e.message : 'fout'))
       .finally(() => setLaden(false));
-  }, [filter, activeDistrictId, sessie.accessToken]);
+  }, [filter, activeDistrictId, sessie.accessToken, effectiefSubregioId]);
 
   return (
     <div className="space-y-4">

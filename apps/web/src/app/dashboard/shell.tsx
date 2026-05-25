@@ -13,7 +13,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 }
 
 function Innerlijk({ children }: { children: React.ReactNode }) {
-  const { sessie, heeft, uitloggen } = useDashboard();
+  const {
+    sessie,
+    heeft,
+    uitloggen,
+    activeSubregioNaam,
+    activeSubregioCode,
+    filterEigenSubregio,
+    setFilterEigenSubregio,
+  } = useDashboard();
   const path = usePathname();
 
   type NavItem = { href: string; label: string; needs?: string };
@@ -37,6 +45,13 @@ function Innerlijk({ children }: { children: React.ReactNode }) {
           <p className="mt-2 text-xs text-gray-600">
             {sessie.user.rollen.map((r) => r.rol).join(', ') || '—'}
           </p>
+          {activeSubregioNaam && (
+            <p className="mt-1 text-xs">
+              <span className="rounded-full bg-sdp-groen/10 px-2 py-0.5 text-sdp-groen">
+                {activeSubregioCode} · {activeSubregioNaam}
+              </span>
+            </p>
+          )}
           <button
             onClick={uitloggen}
             className="mt-3 text-xs text-gray-600 underline hover:text-gray-900"
@@ -44,6 +59,25 @@ function Innerlijk({ children }: { children: React.ReactNode }) {
             Uitloggen
           </button>
         </div>
+
+        {activeSubregioNaam && (
+          <div className="mt-4 rounded-lg bg-white p-3 shadow-sm">
+            <label className="flex cursor-pointer items-start gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={filterEigenSubregio}
+                onChange={(e) => setFilterEigenSubregio(e.target.checked)}
+                className="mt-0.5 rounded text-sdp-groen focus:ring-sdp-groen"
+              />
+              <span>
+                <span className="font-medium">Alleen mijn subregio</span>
+                <span className="block text-gray-500">
+                  Toon {filterEigenSubregio ? `alleen ${activeSubregioNaam}` : 'het hele district'}.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
 
         <nav className="mt-4 rounded-lg bg-white p-2 shadow-sm">
           {zichtbaar.map((i) => {

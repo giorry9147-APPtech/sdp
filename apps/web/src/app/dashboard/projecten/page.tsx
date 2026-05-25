@@ -17,7 +17,7 @@ const FILTERS: Array<{ label: string; status?: ProjectStatus }> = [
 ];
 
 export default function ProjectenLijstPage() {
-  const { sessie, activeDistrictId, heeft } = useDashboard();
+  const { sessie, activeDistrictId, heeft, effectiefSubregioId } = useDashboard();
   const [filter, setFilter] = useState<ProjectStatus | undefined>();
   const [lijst, setLijst] = useState<ProjectLijst[]>([]);
   const [fout, setFout] = useState<string | null>(null);
@@ -28,11 +28,14 @@ export default function ProjectenLijstPage() {
     setLaden(true);
     setFout(null);
     api
-      .projectLijst(activeDistrictId, sessie.accessToken, filter)
+      .projectLijst(activeDistrictId, sessie.accessToken, {
+        status: filter,
+        subregioId: effectiefSubregioId,
+      })
       .then(setLijst)
       .catch((e) => setFout(e instanceof Error ? e.message : 'fout'))
       .finally(() => setLaden(false));
-  }, [filter, activeDistrictId, sessie.accessToken]);
+  }, [filter, activeDistrictId, sessie.accessToken, effectiefSubregioId]);
 
   // KPI's
   const stats = useMemo(() => {

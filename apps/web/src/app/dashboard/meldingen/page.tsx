@@ -22,7 +22,7 @@ const urgentieKleur: Record<string, string> = {
 };
 
 export default function MeldingenLijstPage() {
-  const { sessie, activeDistrictId } = useDashboard();
+  const { sessie, activeDistrictId, effectiefSubregioId } = useDashboard();
   const [filter, setFilter] = useState<string | undefined>();
   const [zoek, setZoek] = useState('');
   const [meldingen, setMeldingen] = useState<Awaited<ReturnType<typeof api.meldingenLijst>>>([]);
@@ -34,11 +34,14 @@ export default function MeldingenLijstPage() {
     setLaden(true);
     setFout(null);
     api
-      .meldingenLijst(activeDistrictId, sessie.accessToken, filter)
+      .meldingenLijst(activeDistrictId, sessie.accessToken, {
+        status: filter,
+        subregioId: effectiefSubregioId,
+      })
       .then(setMeldingen)
       .catch((e) => setFout(e instanceof Error ? e.message : 'fout'))
       .finally(() => setLaden(false));
-  }, [filter, activeDistrictId, sessie.accessToken]);
+  }, [filter, activeDistrictId, sessie.accessToken, effectiefSubregioId]);
 
   const gefilterd = useMemo(() => {
     if (!zoek) return meldingen;

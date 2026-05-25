@@ -11,7 +11,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { customAlphabet } from 'nanoid';
 import { Prisma, VergunningStatus } from '@prisma/client';
@@ -129,15 +129,22 @@ export class VergunningenController {
   @Auth('vergunning.read.district', 'vergunning.read.nationaal')
   @ApiTags('vergunningen')
   @ApiOperation({ summary: 'Lijst vergunningen per district (DC + medewerker)' })
+  @ApiQuery({ name: 'subregioId', required: false, description: 'Filter op DC-cluster' })
   async lijst(
     @Query('districtId', ParseIntPipe) districtId: number,
     @Query('status') status?: VergunningStatus,
+    @Query('subregioId') subregioId?: string,
   ) {
     return this.prisma.vergunning.findMany({
-      where: { districtId, status },
+      where: {
+        districtId,
+        status,
+        ...(subregioId ? { subregioId: Number(subregioId) } : {}),
+      },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       include: {
         categorie: { select: { id: true, naam: true } },
+        subregio: { select: { id: true, code: true, naam: true } },
         aanvrager: { select: { id: true, naam: true, email: true } },
       },
     });

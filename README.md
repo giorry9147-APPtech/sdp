@@ -96,6 +96,7 @@ pnpm db:seed
 
 # 5. Demo-gebruikers + realistische demo-data voor presentatie
 pnpm --filter @sdp/api admin:seed-demo
+pnpm --filter @sdp/api admin:seed-dcs           # 15 subregios + 20 echte DC's
 pnpm --filter @sdp/api admin:seed-demo-data
 ```
 
@@ -124,17 +125,35 @@ pnpm --filter @sdp/web dev   # http://localhost:3000
 
 ### Inloggen — demo-gebruikers
 
-Na `admin:seed-demo` kun je inloggen met deze accounts (wachtwoord: **`Welkom2026!`**):
+Na `admin:seed-demo` + `admin:seed-dcs` kun je inloggen met deze accounts (wachtwoord: **`Welkom2026!`**):
+
+**Realistische DC's** (bron: [`docs/DC's.md`](docs/DC's.md), 20 stuks; emails alleen voor demo, NIET productie):
+
+| Email | Rol | Sub-regio |
+|-------|-----|-----------|
+| `ernesto.muller@sdp.sr` | DC Wanica | Zuid-Oost |
+| `ravi.bhattoe@sdp.sr` | DC Wanica | Centrum |
+| `glenda.kranenburg@sdp.sr` | DC Wanica | Noord-West |
+| `marlon.budike@sdp.sr` | DC Paramaribo | Noord-Oost |
+| `josafat.kanape@sdp.sr` | DC Sipaliwini | Tapanahony |
+| `mohamed.bakas@sdp.sr` | DC Nickerie | (hele district) |
+| _… 14 meer per district, zie [`apps/api/src/scripts/seed-dcs-realistic.ts`](apps/api/src/scripts/seed-dcs-realistic.ts)_ | | |
+
+**Ondersteunende rollen** (Wanica-team voor 4-ogen flows):
 
 | Email | Rol | Voor demo |
 |-------|-----|-----------|
-| `dc.wanica@sdp.local` | DC Wanica | DC-dashboard + vergunningen + plannen |
+| `secretaris.wanica@sdp.local` | Districtssecretaris | Districtsfonds-uitgave aanvragen (4-ogen → DC keurt goed) |
 | `rc.lelydorp@sdp.local` | Ressortcoördinator | Ressortplan opstellen |
 | `rrlid.lelydorp@sdp.local` | RR-lid | Ressortplan goedkeuren |
 | `drlid.wanica@sdp.local` | DR-lid | Districtsplan goedkeuren |
-| `directeur@ro.sr` | Directeur Decentralisatie | RO-eindgoedkeuring |
-| `auditor@clad.sr` | CLAD Auditor | Audit-log |
+| `directeur@ro.sr` | Directeur Decentralisatie | RO-eindgoedkeuring + fonds.goedkeur |
+| `auditor@clad.sr` | CLAD Auditor | Audit-log + CSV-export |
 | `super@sdp.local` | Systeembeheerder | Alles |
+
+> **Email-domein:** `@sdp.sr` voor DC's (officieel-ogend, klaar voor productie),
+> `@sdp.local` voor demo-/test-accounts. Voor productie-uitrol: zie
+> [`docs/03-stappenplan.md`](docs/03-stappenplan.md) Fase 0.
 
 ### Nieuwe gebruiker aanmaken
 

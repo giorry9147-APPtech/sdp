@@ -18,6 +18,7 @@
     "prisma:studio": "prisma studio",
     "admin:create": "tsx src/scripts/admin-create.ts",
     "admin:seed-demo": "tsx src/scripts/seed-demo-users.ts",
+    "admin:seed-dcs": "tsx src/scripts/seed-dcs-realistic.ts",
     "admin:seed-demo-data": "tsx src/scripts/seed-demo-data.ts"
   },
   "prisma": {

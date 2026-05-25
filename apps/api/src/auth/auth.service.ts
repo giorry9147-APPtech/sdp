@@ -133,6 +133,7 @@ export class AuthService {
                 permissies: { include: { permissie: true } },
               },
             },
+            subregio: { select: { code: true, naam: true } },
           },
         },
       },
@@ -147,6 +148,9 @@ export class AuthService {
       scope: gr.rol.scope,
       districtId: gr.districtId ?? undefined,
       ressortId: gr.ressortId ?? undefined,
+      subregioId: gr.subregioId ?? undefined,
+      subregioCode: gr.subregio?.code,
+      subregioNaam: gr.subregio?.naam,
     }));
 
     const permissies = new Set<string>();

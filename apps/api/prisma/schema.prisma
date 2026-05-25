@@ -36,6 +36,7 @@ model District {
 
   ressorten         Ressort[]
   bestuursressorten Bestuursressort[]
+  subregios         Subregio[]
   meldingen         Melding[]
   vergunningen      Vergunning[]
   projecten         Project[]
@@ -44,6 +45,30 @@ model District {
   gebruikerRollen   GebruikerRol[]
 
   @@map("districten")
+}
+
+/// Subregio = DC-bestuurscluster binnen een district.
+/// Sommige districten hebben meerdere DC's (Paramaribo 3, Wanica 3,
+/// Marowijne 2, Sipaliwini 7). Subregio modelleert deze sub-indeling
+/// los van de formele Bestuursressort (binnenland zonder RR).
+/// Districten met 1 DC hebben 0 subregio's (DC werkt district-breed).
+model Subregio {
+  id         Int      @id @default(autoincrement())
+  districtId Int      @map("district_id")
+  code       String   @unique // bv. "PAR-NO", "WAN-ZO", "SIP-TAP"
+  naam       String   // bv. "Noord-Oost", "Zuid-Oost", "Tapanahony"
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  district        District          @relation(fields: [districtId], references: [id])
+  gebruikerRollen GebruikerRol[]
+  meldingen       Melding[]
+  vergunningen    Vergunning[]
+  projecten       Project[]
+
+  @@unique([districtId, naam])
+  @@index([districtId])
+  @@map("subregios")
 }
 
 /// 9 bestuursressorten (geen RR, hebben een bestuursopzichter).
@@ -189,19 +214,22 @@ model GebruikerRol {
   rolId       Int       @map("rol_id")
   districtId  Int?      @map("district_id")
   ressortId   Int?      @map("ressort_id")
+  subregioId  Int?      @map("subregio_id") // DC-cluster binnen district (optioneel)
   geldigVan   DateTime  @default(now()) @map("geldig_van")
   geldigTot   DateTime? @map("geldig_tot")
   createdAt   DateTime  @default(now()) @map("created_at")
   createdBy   String?   @map("created_by")
 
-  gebruiker Gebruiker @relation(fields: [gebruikerId], references: [id], onDelete: Cascade)
-  rol       Rol       @relation(fields: [rolId], references: [id])
-  district  District? @relation(fields: [districtId], references: [id])
-  ressort   Ressort?  @relation(fields: [ressortId], references: [id])
+  gebruiker Gebruiker  @relation(fields: [gebruikerId], references: [id], onDelete: Cascade)
+  rol       Rol        @relation(fields: [rolId], references: [id])
+  district  District?  @relation(fields: [districtId], references: [id])
+  ressort   Ressort?   @relation(fields: [ressortId], references: [id])
+  subregio  Subregio?  @relation(fields: [subregioId], references: [id])
 
   @@index([gebruikerId])
   @@index([rolId])
   @@index([districtId])
+  @@index([subregioId])
   @@map("gebruiker_rollen")
 }
 
@@ -335,6 +363,7 @@ model Melding {
   ticketNummer        String        @unique @map("ticket_nummer") // mensleesbaar, bv. "MLD-2026-00001"
   districtId          Int           @map("district_id")
   ressortId           Int?          @map("ressort_id")
+  subregioId          Int?          @map("subregio_id") // DC-cluster (optioneel, geërfd van toewijzing)
   categorieId         Int           @map("categorie_id")
   status              MeldingStatus @default(NIEUW)
   urgentie            Urgentie      @default(MIDDEL)
@@ -357,6 +386,7 @@ model Melding {
 
   district       District       @relation(fields: [districtId], references: [id])
   ressort        Ressort?       @relation(fields: [ressortId], references: [id])
+  subregio       Subregio?      @relation(fields: [subregioId], references: [id])
   categorie      Categorie      @relation(fields: [categorieId], references: [id])
   toegewezenAan  Gebruiker?     @relation("MeldingToegewezenAan", fields: [toegewezenAanId], references: [id])
   bijlages       MeldingBijlage[]
@@ -427,6 +457,7 @@ model Vergunning {
   status       VergunningStatus @default(CONCEPT)
   aanvragerId  String?          @map("aanvrager_id") // null voor anonieme/publieke aanvraag
   districtId   Int              @map("district_id")
+  subregioId   Int?             @map("subregio_id") // DC-cluster (optioneel)
   titel        String
   beschrijving String?          @db.Text
   locatieOmschrijving String?   @map("locatie_omschrijving")
@@ -450,6 +481,7 @@ model Vergunning {
 
   categorie  Categorie         @relation(fields: [categorieId], references: [id])
   district   District          @relation(fields: [districtId], references: [id])
+  subregio   Subregio?         @relation(fields: [subregioId], references: [id])
   aanvrager  Gebruiker?        @relation("VergunningAanvrager", fields: [aanvragerId], references: [id])
   documenten VergunningDocument[]
   events     VergunningEvent[]
@@ -516,6 +548,7 @@ model Project {
   categorieId      Int?          @map("categorie_id")
   districtId       Int           @map("district_id")
   ressortId        Int?          @map("ressort_id")
+  subregioId       Int?          @map("subregio_id") // DC-cluster (optioneel)
   budgetIndicatief Decimal?      @map("budget_indicatief") @db.Decimal(14, 2)
   budgetWerkelijk  Decimal?      @map("budget_werkelijk") @db.Decimal(14, 2)
   valuta           String        @default("SRD")
@@ -529,12 +562,14 @@ model Project {
 
   district  District         @relation(fields: [districtId], references: [id])
   ressort   Ressort?         @relation(fields: [ressortId], references: [id])
+  subregio  Subregio?        @relation(fields: [subregioId], references: [id])
   categorie Categorie?       @relation(fields: [categorieId], references: [id])
   updates   ProjectUpdate[]
   fondsuitgaven DistrictsfondsUitgave[]
 
   @@index([districtId, status])
   @@index([ressortId])
+  @@index([subregioId])
   @@map("projecten")
 }
 

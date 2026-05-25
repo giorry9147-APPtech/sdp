@@ -54,11 +54,16 @@ export class MeldingenController {
   @ApiOperation({ summary: 'Lijst meldingen — scope op rol' })
   @ApiQuery({ name: 'districtId', required: true })
   @ApiQuery({ name: 'status', required: false, enum: MeldingStatus })
+  @ApiQuery({ name: 'subregioId', required: false, description: 'Filter op DC-cluster' })
   async lijst(
     @Query('districtId', ParseIntPipe) districtId: number,
     @Query('status') status?: MeldingStatus,
+    @Query('subregioId') subregioId?: string,
   ) {
-    return this.service.lijstVoorDistrict(districtId, { status });
+    return this.service.lijstVoorDistrict(districtId, {
+      status,
+      subregioId: subregioId ? Number(subregioId) : undefined,
+    });
   }
 
   @Get(':id')

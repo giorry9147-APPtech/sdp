@@ -231,10 +231,11 @@ export const api = {
   meldingenLijst: (
     districtId: number,
     token: string,
-    status?: string,
+    opts?: { status?: string; subregioId?: number },
   ) => {
     const qs = new URLSearchParams({ districtId: String(districtId) });
-    if (status) qs.set('status', status);
+    if (opts?.status) qs.set('status', opts.status);
+    if (opts?.subregioId) qs.set('subregioId', String(opts.subregioId));
     return request<Array<{
       id: number;
       ticketNummer: string;
@@ -246,6 +247,7 @@ export const api = {
       melderNaam?: string | null;
       createdAt: string;
       ressort?: { id: number; naam: string } | null;
+      subregio?: { id: number; code: string; naam: string } | null;
       categorie?: { id: number; naam: string };
       toegewezenAan?: { id: string; naam: string } | null;
       _count?: { bijlages: number; events: number };
@@ -321,11 +323,18 @@ export const api = {
   vergunningStatus: (ref: string) =>
     request<VergunningStatusPubliek>(`/vergunningen/ref/${encodeURIComponent(ref)}`),
 
-  vergunningLijst: (districtId: number, token: string, status?: VergunningStatus) =>
-    request<Vergunning[]>(
-      `/vergunningen?districtId=${districtId}${status ? `&status=${status}` : ''}`,
-      { headers: { Authorization: `Bearer ${token}` } },
-    ),
+  vergunningLijst: (
+    districtId: number,
+    token: string,
+    opts?: { status?: VergunningStatus; subregioId?: number },
+  ) => {
+    const qs = new URLSearchParams({ districtId: String(districtId) });
+    if (opts?.status) qs.set('status', opts.status);
+    if (opts?.subregioId) qs.set('subregioId', String(opts.subregioId));
+    return request<Vergunning[]>(`/vergunningen?${qs.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
 
   vergunningDetail: (id: number, token: string) =>
     request<Vergunning>(`/vergunningen/${id}`, {
@@ -454,9 +463,14 @@ export const api = {
     ),
 
   // ─── Projecten ────────────────────────────────────────────────────
-  projectLijst: (districtId: number, token: string, status?: ProjectStatus) => {
+  projectLijst: (
+    districtId: number,
+    token: string,
+    opts?: { status?: ProjectStatus; subregioId?: number },
+  ) => {
     const qs = new URLSearchParams({ districtId: String(districtId) });
-    if (status) qs.set('status', status);
+    if (opts?.status) qs.set('status', opts.status);
+    if (opts?.subregioId) qs.set('subregioId', String(opts.subregioId));
     return request<ProjectLijst[]>(`/projecten?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     });

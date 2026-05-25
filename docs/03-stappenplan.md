@@ -14,8 +14,13 @@ Concrete bouwvolgorde van eerste lijn code tot productie-pilot in één district
 - [ ] **Branding & naam vaststellen** (SDP definitief?), logo, kleurpalet.
 - [ ] **Hosting-keuze**: lokaal datacenter Suriname vs. regio (Caribbean/AWS Brazilië) — zie [04-architectuur.md](04-architectuur.md).
 - [ ] **Repo + CI/CD opzetten**, environments dev/staging/prod, secret management.
+- [ ] **DC-emails activeren op @sdp.sr-domein.** Demo gebruikt nu `<voornaam>.<achternaam>@sdp.sr`-accounts uit [`docs/DC's.md`](DC's.md). Voor productie:
+  1. Domein `sdp.sr` registreren + DNS bij IT-cel RO
+  2. Mailbox aanmaken per DC (Microsoft 365 of Google Workspace)
+  3. DC-eigenaar verifieert eerst via persoonlijke email uit bronlijst (hotmail/gmail), daarna pas wachtwoord-reset naar `@sdp.sr`
+  4. Echte emailadressen uit `DC's.md` blijven UITSLUITEND als fallback-contact in een secrets-store — NIET in DB of git
 
-**Deliverable Fase 0:** projectcharter (1 pagina), pilot-DC akkoord, hosting-keuze gemaakt, repo staat klaar.
+**Deliverable Fase 0:** projectcharter (1 pagina), pilot-DC akkoord, hosting-keuze gemaakt, repo staat klaar, DC-emails op `@sdp.sr` actief.
 
 ---
 

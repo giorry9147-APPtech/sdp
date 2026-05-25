@@ -7,6 +7,9 @@ export type RolScopeContext = {
   scope: 'NATIONAAL' | 'DISTRICT' | 'RESSORT';
   districtId?: number;
   ressortId?: number;
+  subregioId?: number; // DC-cluster binnen district (alleen voor DC's met subregio)
+  subregioCode?: string; // bv. 'WAN-ZO' — handig voor UI-labels
+  subregioNaam?: string; // bv. 'Zuid-Oost' — voor UI-display
 };
 
 export type AuthenticatedUser = {

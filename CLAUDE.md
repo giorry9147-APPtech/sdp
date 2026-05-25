@@ -69,3 +69,10 @@ Web: http://localhost:3000
 - Admin-CLI voor eerste user (`pnpm api admin:create`)
 - Pilot-DC kiezen (Wanica of Paramaribo) — zie docs/01-mvp-scope.md
 - Hosting-keuze (lokaal Suriname vs. regio) — zie docs/04-architectuur.md
+- **`@sdp.sr`-domein registreren** + DC-mailboxen activeren (zie Fase 0 in docs/03-stappenplan.md). Demo gebruikt nu sdp.sr-accounts uit docs/DC's.md, echte emails staan daar maar zitten NIET in de database.
+
+## Demo-data (na seed)
+
+- 10 districten + 62 ressorten + 15 subregios (PAR-NO/ZW/MD, WAN-ZO/CN/NW, MAR-MOE/ALB, SIP-COE/COP/SAR/SUR/TAP/KAB/PAM)
+- 20 realistische DC-accounts op `@sdp.sr` (wachtwoord `Welkom2026!`) — bv. `ernesto.muller@sdp.sr` (DC Wanica Zuid-Oost), `josafat.kanape@sdp.sr` (DC Sipa Tapanahony)
+- Ondersteunende `@sdp.local` rollen (districtssecretaris, RR-lid, etc.) voor 4-ogen-flows

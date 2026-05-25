@@ -39,16 +39,10 @@ const USERS: DemoUser[] = [
     naam: 'Directeur Decentralisatie',
     rollen: [{ rolCode: 'ro_directeur_decentralisatie' }],
   },
-  {
-    email: 'dc.wanica@sdp.local',
-    naam: 'DC Wanica',
-    rollen: [{ rolCode: 'dc', districtCode: 'WAN' }],
-  },
-  {
-    email: 'dc.paramaribo@sdp.local',
-    naam: 'DC Paramaribo',
-    rollen: [{ rolCode: 'dc', districtCode: 'PAR' }],
-  },
+  // DC's worden niet hier maar in seed-dcs-realistic.ts gemaakt
+  // (met echte namen + subregio's per docs/DC's.md). Run beide scripts:
+  //   pnpm admin:seed-demo
+  //   pnpm admin:seed-dcs
   {
     email: 'secretaris.wanica@sdp.local',
     naam: 'Districtssecretaris Wanica',

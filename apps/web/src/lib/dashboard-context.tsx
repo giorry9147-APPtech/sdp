@@ -16,6 +16,15 @@ type Ctx = {
   sessie: Sessie;
   activeDistrictId: number;
   activeRessortId?: number;
+  /** Subregio van eerste DC-rol — optioneel, alleen voor DC's met sub-regio. */
+  activeSubregioId?: number;
+  activeSubregioCode?: string;
+  activeSubregioNaam?: string;
+  /** Toggle in UI: filter dashboards/lijsten op eigen subregio (default: aan). */
+  filterEigenSubregio: boolean;
+  setFilterEigenSubregio: (v: boolean) => void;
+  /** Convenience: effectieve subregioId voor API-calls (undefined = hele district). */
+  effectiefSubregioId?: number;
   permissies: Set<string>;
   heeft: (permissie: string) => boolean;
   uitloggen: () => void;
@@ -26,6 +35,7 @@ const DashboardCtx = createContext<Ctx | null>(null);
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [s, setS] = useState<Sessie | null>(null);
+  const [filterEigenSubregio, setFilterEigenSubregio] = useState(true);
 
   useEffect(() => {
     const huidige = sessie.get();
@@ -46,11 +56,20 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     const activeRessortId = ressortRol?.ressortId;
     const activeDistrictId =
       ressortRol?.districtId ?? districtRol?.districtId ?? (isNationaal ? 1 : 0);
+    const subregioRol = s.user.rollen.find((r) => r.subregioId);
+    const activeSubregioId = subregioRol?.subregioId;
     const permissies = new Set(s.user.permissies);
     return {
       sessie: s,
       activeDistrictId,
       activeRessortId,
+      activeSubregioId,
+      activeSubregioCode: subregioRol?.subregioCode,
+      activeSubregioNaam: subregioRol?.subregioNaam,
+      filterEigenSubregio,
+      setFilterEigenSubregio,
+      effectiefSubregioId:
+        filterEigenSubregio && activeSubregioId ? activeSubregioId : undefined,
       permissies,
       heeft: (p: string) => permissies.has(p),
       uitloggen: () => {
@@ -58,7 +77,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         router.replace('/');
       },
     };
-  }, [s, router]);
+  }, [s, router, filterEigenSubregio]);
 
   if (!ctx) {
     return (
