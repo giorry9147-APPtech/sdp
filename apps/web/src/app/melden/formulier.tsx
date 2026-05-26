@@ -4,10 +4,34 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api, type Categorie, type District, type Ressort } from '@/lib/api';
 
+const MAX_FOTOS = 5;
+const MAX_FOTO_BYTES = 5 * 1024 * 1024; // 5 MB
+const TOEGESTANE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+];
+
+type FotoState = {
+  bestand: File;
+  status: 'wachtend' | 'bezig' | 'klaar' | 'fout';
+  fout?: string;
+};
+
 type Bericht =
   | { soort: 'idle' }
   | { soort: 'bezig' }
-  | { soort: 'gelukt'; ticket: string }
+  | {
+      soort: 'gelukt';
+      ticket: string;
+      autoToegewezen: boolean;
+      fotosGeupload: number;
+      fotosTotaal: number;
+      fouten: string[];
+    }
   | { soort: 'fout'; bericht: string };
 
 export function MeldFormulier({
@@ -30,9 +54,11 @@ export function MeldFormulier({
   const [melderEmail, setMelderEmail] = useState('');
   const [consent, setConsent] = useState(false);
   const [geo, setGeo] = useState<{ lat: number; lon: number } | null>(null);
+  const [geoBezig, setGeoBezig] = useState(false);
+  const [geoFout, setGeoFout] = useState<string | null>(null);
+  const [fotos, setFotos] = useState<FotoState[]>([]);
   const [bericht, setBericht] = useState<Bericht>({ soort: 'idle' });
 
-  // Ressorten laden zodra district gekozen
   useEffect(() => {
     if (!districtId) {
       setRessorten([]);
@@ -45,18 +71,85 @@ export function MeldFormulier({
     setRessortId('');
   }, [districtId, districten]);
 
+  // B2 — vraag locatie zodra de gebruiker een district kiest. Dit is het
+  // moment waarop GPS écht relevant wordt en de browser-toestemming
+  // contextueel logisch is (in plaats van bij page-load, wat blocks geeft).
+  useEffect(() => {
+    if (!districtId || geo || geoFout || geoBezig) return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGeoFout('Geen GPS beschikbaar in deze browser');
+      return;
+    }
+    setGeoBezig(true);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setGeo({ lat: p.coords.latitude, lon: p.coords.longitude });
+        setGeoBezig(false);
+      },
+      (err) => {
+        setGeoBezig(false);
+        setGeoFout(
+          err.code === err.PERMISSION_DENIED
+            ? 'Geen toestemming voor locatie — u kunt zelf een straatadres invullen'
+            : 'Locatie kon niet bepaald worden',
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+    );
+  }, [districtId, geo, geoFout, geoBezig]);
+
   const formulierGeldig = useMemo(
     () => Boolean(districtId && categorieId && titel.length >= 3 && omschrijving.length >= 10),
     [districtId, categorieId, titel, omschrijving],
   );
 
   function locatieOphalen() {
-    if (!navigator.geolocation) return;
+    setGeoFout(null);
+    setGeoBezig(true);
     navigator.geolocation.getCurrentPosition(
-      (p) => setGeo({ lat: p.coords.latitude, lon: p.coords.longitude }),
-      () => setGeo(null),
+      (p) => {
+        setGeo({ lat: p.coords.latitude, lon: p.coords.longitude });
+        setGeoBezig(false);
+      },
+      (err) => {
+        setGeoBezig(false);
+        setGeoFout(
+          err.code === err.PERMISSION_DENIED
+            ? 'Locatie geweigerd — vul straat/kruispunt in'
+            : 'Locatie kon niet bepaald worden',
+        );
+      },
       { enableHighAccuracy: true, timeout: 10_000 },
     );
+  }
+
+  function fotosToevoegen(e: React.ChangeEvent<HTMLInputElement>) {
+    const nieuw: FotoState[] = [];
+    const fouten: string[] = [];
+    for (const f of Array.from(e.target.files ?? [])) {
+      if (fotos.length + nieuw.length >= MAX_FOTOS) {
+        fouten.push(`Maximaal ${MAX_FOTOS} bestanden`);
+        break;
+      }
+      if (!TOEGESTANE_TYPES.includes(f.type)) {
+        fouten.push(`${f.name}: type ${f.type || 'onbekend'} niet toegestaan`);
+        continue;
+      }
+      if (f.size > MAX_FOTO_BYTES) {
+        fouten.push(`${f.name}: groter dan 5 MB`);
+        continue;
+      }
+      nieuw.push({ bestand: f, status: 'wachtend' });
+    }
+    if (fouten.length) {
+      alert(fouten.join('\n'));
+    }
+    setFotos((huidig) => [...huidig, ...nieuw]);
+    e.target.value = '';
+  }
+
+  function fotoVerwijderen(i: number) {
+    setFotos((huidig) => huidig.filter((_, idx) => idx !== i));
   }
 
   async function indien(e: React.FormEvent) {
@@ -80,7 +173,56 @@ export function MeldFormulier({
         melderEmail: melderEmail || undefined,
         melderConsent: consent,
       });
-      setBericht({ soort: 'gelukt', ticket: r.ticketNummer });
+
+      // Upload alle gekozen foto's na succesvolle melding-create
+      let gelukt = 0;
+      const uploadFouten: string[] = [];
+      for (let i = 0; i < fotos.length; i++) {
+        const foto = fotos[i];
+        setFotos((huidig) =>
+          huidig.map((f, idx) => (idx === i ? { ...f, status: 'bezig' } : f)),
+        );
+        try {
+          const pre = await api.meldingBijlagePresign(r.ticketNummer, {
+            bestandsnaam: foto.bestand.name,
+            mimeType: foto.bestand.type,
+            grootte: foto.bestand.size,
+          });
+          const put = await fetch(pre.uploadUrl, {
+            method: 'PUT',
+            body: foto.bestand,
+            headers: { 'Content-Type': foto.bestand.type },
+          });
+          if (!put.ok) throw new Error(`upload HTTP ${put.status}`);
+          await api.meldingBijlageRegistreer(r.ticketNummer, {
+            fileKey: pre.fileKey,
+            bestandsnaam: foto.bestand.name,
+            mimeType: foto.bestand.type,
+            grootte: foto.bestand.size,
+          });
+          gelukt++;
+          setFotos((huidig) =>
+            huidig.map((f, idx) => (idx === i ? { ...f, status: 'klaar' } : f)),
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'onbekend';
+          uploadFouten.push(`${foto.bestand.name}: ${msg}`);
+          setFotos((huidig) =>
+            huidig.map((f, idx) =>
+              idx === i ? { ...f, status: 'fout', fout: msg } : f,
+            ),
+          );
+        }
+      }
+
+      setBericht({
+        soort: 'gelukt',
+        ticket: r.ticketNummer,
+        autoToegewezen: r.autoToegewezen,
+        fotosGeupload: gelukt,
+        fotosTotaal: fotos.length,
+        fouten: uploadFouten,
+      });
     } catch (e) {
       setBericht({
         soort: 'fout',
@@ -95,15 +237,12 @@ export function MeldFormulier({
         <h2 className="text-xl font-semibold text-emerald-900">
           Bedankt. Uw melding is geregistreerd.
         </h2>
-        <p className="mt-2 text-emerald-900">
-          Uw ticketnummer:
-        </p>
+        <p className="mt-2 text-emerald-900">Uw ticketnummer:</p>
         <p className="mt-1 font-mono text-2xl font-bold text-emerald-700">
           {bericht.ticket}
         </p>
         <p className="mt-4 text-sm text-emerald-900">
-          Bewaar dit nummer. U kunt de status volgen op de
-          {' '}
+          Bewaar dit nummer. U kunt de status volgen op de{' '}
           <Link
             href={`/status?nr=${encodeURIComponent(bericht.ticket)}`}
             className="font-medium underline"
@@ -112,6 +251,27 @@ export function MeldFormulier({
           </Link>
           .
         </p>
+        {bericht.autoToegewezen && (
+          <p className="mt-3 text-sm text-emerald-900">
+            ✓ Uw melding is automatisch toegewezen aan de juiste afdeling op
+            basis van de gekozen categorie.
+          </p>
+        )}
+        {bericht.fotosTotaal > 0 && (
+          <p className="mt-3 text-sm text-emerald-900">
+            Foto&apos;s geüpload: {bericht.fotosGeupload} / {bericht.fotosTotaal}
+          </p>
+        )}
+        {bericht.fouten.length > 0 && (
+          <div className="mt-3 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-semibold">Bij sommige foto&apos;s ging iets mis:</p>
+            <ul className="ml-4 list-disc">
+              {bericht.fouten.map((f, i) => (
+                <li key={i}>{f}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     );
   }
@@ -164,18 +324,35 @@ export function MeldFormulier({
           />
         </Veld>
 
-        <div>
-          <button
-            type="button"
-            onClick={locatieOphalen}
-            className="text-sm text-sdp-groen underline"
-          >
-            📍 Gebruik mijn huidige locatie
-          </button>
-          {geo && (
-            <span className="ml-2 text-xs text-gray-500">
-              ({geo.lat.toFixed(5)}, {geo.lon.toFixed(5)})
-            </span>
+        <div className="rounded border border-sky-200 bg-sky-50 p-3 text-sm">
+          {geo ? (
+            <div className="flex items-center justify-between">
+              <span className="text-sky-900">
+                📍 Locatie gedeeld: {geo.lat.toFixed(5)}, {geo.lon.toFixed(5)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setGeo(null)}
+                className="text-xs text-sky-700 underline"
+              >
+                wissen
+              </button>
+            </div>
+          ) : geoBezig ? (
+            <span className="text-sky-900">📡 Locatie bepalen…</span>
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-sky-900">
+                {geoFout ?? 'GPS-locatie helpt de DC sneller te lokaliseren.'}
+              </span>
+              <button
+                type="button"
+                onClick={locatieOphalen}
+                className="text-xs font-semibold text-sky-700 underline"
+              >
+                📍 Locatie delen
+              </button>
+            </div>
           )}
         </div>
       </fieldset>
@@ -237,6 +414,52 @@ export function MeldFormulier({
             <option value="CRISIS">Crisis — direct gevaar</option>
           </select>
         </Veld>
+
+        <div>
+          <span className="mb-1 block text-sm font-medium text-gray-700">
+            Foto&apos;s ({fotos.length}/{MAX_FOTOS})
+          </span>
+          <p className="mb-2 text-xs text-gray-500">
+            Max 5 bestanden, 5 MB elk. JPG/PNG/WEBP/HEIC of PDF.
+          </p>
+          {fotos.length < MAX_FOTOS && (
+            <input
+              type="file"
+              accept={TOEGESTANE_TYPES.join(',')}
+              multiple
+              onChange={fotosToevoegen}
+              className="block w-full text-sm text-gray-700 file:mr-3 file:rounded file:border-0 file:bg-sdp-groen file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white"
+            />
+          )}
+          {fotos.length > 0 && (
+            <ul className="mt-3 space-y-1 text-sm">
+              {fotos.map((f, i) => (
+                <li key={i} className="flex items-center justify-between rounded border border-gray-200 px-3 py-2">
+                  <span className="truncate">
+                    <span className="font-mono text-xs text-gray-500">
+                      [{(f.bestand.size / 1024).toFixed(0)} KB]
+                    </span>{' '}
+                    {f.bestand.name}
+                    {f.status === 'bezig' && <em className="ml-2 text-amber-700">uploaden…</em>}
+                    {f.status === 'klaar' && <em className="ml-2 text-emerald-700">✓ geüpload</em>}
+                    {f.status === 'fout' && (
+                      <em className="ml-2 text-red-700">fout: {f.fout}</em>
+                    )}
+                  </span>
+                  {f.status === 'wachtend' && (
+                    <button
+                      type="button"
+                      onClick={() => fotoVerwijderen(i)}
+                      className="ml-2 text-xs text-red-600 underline"
+                    >
+                      verwijderen
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </fieldset>
 
       <fieldset className="space-y-4 border-t pt-5">

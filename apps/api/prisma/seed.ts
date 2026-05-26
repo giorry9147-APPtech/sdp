@@ -351,17 +351,25 @@ const ROL_PERMISSIES: Record<string, string[]> = {
 };
 
 // ─── Categorieën ─────────────────────────────────────────────────────
-const CATEGORIEEN_MELDING: Array<{ code: string; naam: string; icoon?: string }> = [
-  { code: 'MELD-WATER', naam: 'Water & drainage', icoon: 'droplet' },
-  { code: 'MELD-WEG', naam: 'Wegen & infrastructuur', icoon: 'road' },
-  { code: 'MELD-VUIL', naam: 'Vuilophaal & afval', icoon: 'trash' },
-  { code: 'MELD-LICHT', naam: 'Straatverlichting', icoon: 'lamp' },
-  { code: 'MELD-MARKT', naam: 'Markt- & standplaats', icoon: 'store' },
-  { code: 'MELD-VEILIG', naam: 'Veiligheid & openbare orde', icoon: 'shield' },
-  { code: 'MELD-GROND', naam: 'Grondmelding (registratie, geen besluit)', icoon: 'map' },
-  { code: 'MELD-DIENST', naam: 'Klacht dienstverlening', icoon: 'message' },
-  { code: 'MELD-MILIEU', naam: 'Milieu & natuur', icoon: 'leaf' },
-  { code: 'MELD-OVERIG', naam: 'Overig', icoon: 'circle' },
+// `standaardToewijzingRol` = code van Rol waaraan meldingen van dit
+// type bij intake automatisch worden toegewezen (B3). Service valt bij
+// geen treffer terug op meldingen_medewerker → districtssecretaris → dc.
+const CATEGORIEEN_MELDING: Array<{
+  code: string;
+  naam: string;
+  icoon?: string;
+  standaardToewijzingRol?: string;
+}> = [
+  { code: 'MELD-WATER', naam: 'Water & drainage', icoon: 'droplet', standaardToewijzingRol: 'projectmedewerker' },
+  { code: 'MELD-WEG', naam: 'Wegen & infrastructuur', icoon: 'road', standaardToewijzingRol: 'projectmedewerker' },
+  { code: 'MELD-VUIL', naam: 'Vuilophaal & afval', icoon: 'trash', standaardToewijzingRol: 'meldingen_medewerker' },
+  { code: 'MELD-LICHT', naam: 'Straatverlichting', icoon: 'lamp', standaardToewijzingRol: 'meldingen_medewerker' },
+  { code: 'MELD-MARKT', naam: 'Markt- & standplaats', icoon: 'store', standaardToewijzingRol: 'vergunningmedewerker' },
+  { code: 'MELD-VEILIG', naam: 'Veiligheid & openbare orde', icoon: 'shield', standaardToewijzingRol: 'inspecteur' },
+  { code: 'MELD-GROND', naam: 'Grondmelding (registratie, geen besluit)', icoon: 'map', standaardToewijzingRol: 'districtssecretaris' },
+  { code: 'MELD-DIENST', naam: 'Klacht dienstverlening', icoon: 'message', standaardToewijzingRol: 'districtssecretaris' },
+  { code: 'MELD-MILIEU', naam: 'Milieu & natuur', icoon: 'leaf', standaardToewijzingRol: 'inspecteur' },
+  { code: 'MELD-OVERIG', naam: 'Overig', icoon: 'circle', standaardToewijzingRol: 'meldingen_medewerker' },
 ];
 
 const CATEGORIEEN_VERGUNNING: Array<{ code: string; naam: string }> = [
@@ -461,7 +469,12 @@ async function main() {
   for (const c of CATEGORIEEN_MELDING) {
     await prisma.categorie.upsert({
       where: { code: c.code },
-      update: { naam: c.naam, icoon: c.icoon, type: CategorieType.MELDING },
+      update: {
+        naam: c.naam,
+        icoon: c.icoon,
+        type: CategorieType.MELDING,
+        standaardToewijzingRol: c.standaardToewijzingRol,
+      },
       create: { ...c, type: CategorieType.MELDING },
     });
   }

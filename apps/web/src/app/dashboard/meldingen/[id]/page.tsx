@@ -17,6 +17,10 @@ export default function MeldingDetailPage({ params }: { params: { id: string } }
 
   const [nieuwStatus, setNieuwStatus] = useState('');
   const [opmerking, setOpmerking] = useState('');
+  const [feedbackLink, setFeedbackLink] = useState<string | null>(null);
+  const [escOpen, setEscOpen] = useState(false);
+  const [escReden, setEscReden] = useState('');
+  const [escBezig, setEscBezig] = useState(false);
 
   function herlaad() {
     api
@@ -34,12 +38,18 @@ export default function MeldingDetailPage({ params }: { params: { id: string } }
     e.preventDefault();
     if (!nieuwStatus) return;
     setBezig(true);
+    setFeedbackLink(null);
     try {
-      await api.meldingStatusWijzigen(
+      const r = await api.meldingStatusWijzigen(
         id,
         { status: nieuwStatus, opmerking: opmerking || undefined },
         sessie.accessToken,
       );
+      if (r.feedbackToken) {
+        const base =
+          typeof window !== 'undefined' ? window.location.origin : '';
+        setFeedbackLink(`${base}/status/feedback?token=${encodeURIComponent(r.feedbackToken)}`);
+      }
       setNieuwStatus('');
       setOpmerking('');
       herlaad();
@@ -132,10 +142,104 @@ export default function MeldingDetailPage({ params }: { params: { id: string } }
         </section>
       )}
 
+      {m.bijlages.length > 0 && (
+        <section className="rounded-lg bg-white p-5 shadow-sm">
+          <h2 className="font-semibold">Bijlages ({m.bijlages.length})</h2>
+          <ul className="mt-3 space-y-2 text-sm">
+            {m.bijlages.map((b) => (
+              <li key={b.id} className="flex items-center justify-between rounded border border-gray-200 px-3 py-2">
+                <span className="truncate">
+                  <span className="font-mono text-xs text-gray-500">
+                    [{(b.grootte / 1024).toFixed(0)} KB · {b.soort}]
+                  </span>{' '}
+                  {b.bestandsnaam}
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const dl = await api.meldingBijlageDownloadUrl(
+                        m.id,
+                        b.id,
+                        sessie.accessToken,
+                      );
+                      window.open(dl.url, '_blank', 'noopener,noreferrer');
+                    } catch (e) {
+                      setFout(e instanceof Error ? e.message : 'download mislukt');
+                    }
+                  }}
+                  className="ml-2 text-xs font-semibold text-sdp-groen underline"
+                >
+                  bekijk / download
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {fout && (
         <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">
           {fout}
         </div>
+      )}
+
+      {heeft('melding.behandel') && (
+        <section className="rounded-lg bg-white p-5 shadow-sm">
+          <h2 className="font-semibold">Escalatie</h2>
+          {!escOpen ? (
+            <button
+              type="button"
+              onClick={() => setEscOpen(true)}
+              className="mt-2 rounded bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+            >
+              ⚠ Escaleer naar RO
+            </button>
+          ) : (
+            <div className="mt-2 space-y-2">
+              <textarea
+                rows={3}
+                maxLength={2000}
+                value={escReden}
+                onChange={(e) => setEscReden(e.target.value)}
+                className="w-full rounded border-amber-300 text-sm"
+                placeholder="Reden voor escalatie naar RO"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEscOpen(false);
+                    setEscReden('');
+                  }}
+                  className="rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+                >
+                  Annuleren
+                </button>
+                <button
+                  type="button"
+                  disabled={escBezig || escReden.trim().length < 5}
+                  onClick={async () => {
+                    setEscBezig(true);
+                    try {
+                      await api.meldingEscaleer(id, { reden: escReden.trim() }, sessie.accessToken);
+                      setEscOpen(false);
+                      setEscReden('');
+                      herlaad();
+                    } catch (e) {
+                      setFout(e instanceof Error ? e.message : 'fout');
+                    } finally {
+                      setEscBezig(false);
+                    }
+                  }}
+                  className="rounded bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow disabled:opacity-50"
+                >
+                  {escBezig ? 'Escaleren…' : 'Escaleer'}
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
       )}
 
       {heeft('melding.behandel') && (
@@ -149,7 +253,7 @@ export default function MeldingDetailPage({ params }: { params: { id: string } }
             <option value="">— kies nieuwe status —</option>
             <option value="IN_BEHANDELING">In behandeling</option>
             <option value="EXTRA_INFO_NODIG">Extra info nodig (contact melder)</option>
-            <option value="OPGELOST">Opgelost</option>
+            <option value="OPGELOST">Opgelost (burger wordt om bevestiging gevraagd)</option>
             <option value="GESLOTEN">Gesloten</option>
             <option value="HEROPEND">Heropenen</option>
           </select>
@@ -168,6 +272,17 @@ export default function MeldingDetailPage({ params }: { params: { id: string } }
           >
             Status bijwerken
           </button>
+          {feedbackLink && (
+            <div className="rounded border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+              <p className="font-semibold">Feedback-link voor de melder:</p>
+              <p className="mt-1 break-all font-mono">{feedbackLink}</p>
+              <p className="mt-2 text-xs">
+                Stuur deze link naar {m.melderEmail ?? m.melderTelefoon ?? 'de melder'}{' '}
+                zodat hij/zij kan bevestigen dat het probleem echt opgelost is.
+                (Zodra de email-gateway live is gaat dit automatisch — H1 in backlog.)
+              </p>
+            </div>
+          )}
         </form>
       )}
 

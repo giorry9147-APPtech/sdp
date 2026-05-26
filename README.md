@@ -98,7 +98,11 @@ pnpm db:seed
 pnpm --filter @sdp/api admin:seed-demo
 pnpm --filter @sdp/api admin:seed-dcs           # 15 subregios + 20 echte DC's
 pnpm --filter @sdp/api admin:seed-demo-data
+pnpm --filter @sdp/api admin:seed-demo-bcf      # B/C/F demo-scenarios — zie docs/10-demo-walkthrough.md
 ```
+
+> Stap-voor-stap demo van Burger Meldpunt + DC-dashboard + Projectmonitoring:
+> [`docs/10-demo-walkthrough.md`](docs/10-demo-walkthrough.md).
 
 ### Dev-server starten
 

@@ -43,6 +43,7 @@ model District {
   districtsplannen  Districtsplan[]
   districtsfondsen  Districtsfonds[]
   gebruikerRollen   GebruikerRol[]
+  dcNotities        DcNotitie[]
 
   @@map("districten")
 }
@@ -157,6 +158,8 @@ model Gebruiker {
   auditLog        AuditLog[]
   sessies         Sessie[]
   magicLinks      MagicLink[]
+  dcNotities      DcNotitie[]
+  projectRisicos  ProjectRisico[]
 
   @@index([authProvider, externalId])
   @@map("gebruikers")
@@ -308,6 +311,28 @@ model AuditLog {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// DC-NOTITIES — vrije dag-aantekeningen op het DC-dashboard (C4)
+// Korte werkjournaal-entries (besluit-notitie, observatie) per district,
+// los van een specifiek dossier. Niet hetzelfde als auditlog (die zit op
+// elke write); dit zijn proactieve aantekeningen van de behandelaar.
+// ═══════════════════════════════════════════════════════════════════
+
+model DcNotitie {
+  id          Int      @id @default(autoincrement())
+  districtId  Int      @map("district_id")
+  actorId     String   @map("actor_id")
+  body        String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  district District   @relation(fields: [districtId], references: [id])
+  actor    Gebruiker  @relation(fields: [actorId], references: [id])
+
+  @@index([districtId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@map("dc_notities")
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // CATEGORIEËN — gedeeld door meldingen, vergunningen, projecten
 // ═══════════════════════════════════════════════════════════════════
 
@@ -326,6 +351,11 @@ model Categorie {
   icoon        String?
   actief       Boolean       @default(true)
   volgorde     Int           @default(0)
+  // Rol-code (zie model Rol) waaraan meldingen van dit type automatisch
+  // toegewezen worden bij intake. Service zoekt eerste actieve gebruiker
+  // met deze rol in het juiste district. Optioneel; bij geen match valt
+  // service terug op `meldingen_medewerker` → `districtssecretaris` → `dc`.
+  standaardToewijzingRol String? @map("standaard_toewijzing_rol")
   createdAt    DateTime      @default(now()) @map("created_at")
 
   parent       Categorie?    @relation("CategorieHierarchie", fields: [parentId], references: [id])
@@ -346,9 +376,10 @@ enum MeldingStatus {
   NIEUW
   IN_BEHANDELING
   EXTRA_INFO_NODIG
-  OPGELOST
-  GESLOTEN
-  HEROPEND
+  OPGELOST                // DC zegt: probleem aangepakt
+  BEVESTIGD_DOOR_BURGER   // burger heeft via magic-link bevestigd
+  GESLOTEN                // administratief afgesloten
+  HEROPEND                // burger meldt probleem terug (na OPGELOST/GESLOTEN)
 }
 
 enum Urgentie {
@@ -381,6 +412,8 @@ model Melding {
   toegewezenAanId String?    @map("toegewezen_aan_id")
   toegewezenOp    DateTime?  @map("toegewezen_op")
   geslotenOp      DateTime?  @map("gesloten_op")
+  burgerBevestigdOp DateTime? @map("burger_bevestigd_op") // B4 — burger zei "ja, opgelost"
+  burgerHeropendOp  DateTime? @map("burger_heropend_op")  // B5 — burger heropent na sluiting
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
@@ -555,7 +588,16 @@ model Project {
   startDatum       DateTime?     @map("start_datum") @db.Date
   eindDatumPlan    DateTime?     @map("eind_datum_plan") @db.Date
   eindDatumWerkelijk DateTime?   @map("eind_datum_werkelijk") @db.Date
-  contractor       String?
+
+  // F2 — Contractor-gegevens gestructureerd. `contractor` blijft als
+  // bedrijfsnaam/aannemer; aanvullend KKF-nummer (Kamer van Koophandel
+  // en Fabrieken) en contactgegevens voor opvolging.
+  contractor              String?
+  contractorKkfNummer     String? @map("contractor_kkf_nummer")
+  contractorContactpersoon String? @map("contractor_contactpersoon")
+  contractorTelefoon      String? @map("contractor_telefoon")
+  contractorEmail         String? @map("contractor_email")
+
   geom             Unsupported("geography(Point, 4326)")?
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
@@ -566,11 +608,40 @@ model Project {
   categorie Categorie?       @relation(fields: [categorieId], references: [id])
   updates   ProjectUpdate[]
   fondsuitgaven DistrictsfondsUitgave[]
+  risicos   ProjectRisico[]
 
   @@index([districtId, status])
   @@index([ressortId])
   @@index([subregioId])
   @@map("projecten")
+}
+
+// F1 — Risico-notities op een project. Status volgt het standaard
+// risicobeheer-model: OPEN (geconstateerd, nog niet aangepakt) →
+// GEMITIGEERD (maatregel genomen) of GEESCALEERD (overstijgt project).
+enum ProjectRisicoStatus {
+  OPEN
+  GEMITIGEERD
+  GEESCALEERD
+}
+
+model ProjectRisico {
+  id          Int                @id @default(autoincrement())
+  projectId   Int                @map("project_id")
+  actorId     String             @map("actor_id")
+  titel       String
+  beschrijving String            @db.Text
+  mitigatie   String?            @db.Text // wat is gedaan / voorgesteld
+  status      ProjectRisicoStatus @default(OPEN)
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   Gebruiker @relation(fields: [actorId], references: [id])
+
+  @@index([projectId, status])
+  @@index([projectId, createdAt(sort: Desc)])
+  @@map("project_risicos")
 }
 
 model ProjectUpdate {

@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { useDashboard } from '@/lib/dashboard-context';
 import { api, type ProjectDetail, type ProjectStatus } from '@/lib/api';
 import { projectStatusKleur, srdFormat, statusLabel } from '@/lib/status-stijl';
+import { ContractorCard } from '../_components/contractor-card';
+import { RisicoCard } from '../_components/risico-card';
 
 export default function ProjectDetailPage({ params }: { params: { id: string } }) {
   const id = Number(params.id);
@@ -124,7 +126,6 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
         <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
           {p.categorie && <Rij label="Categorie">{p.categorie.naam}</Rij>}
-          {p.contractor && <Rij label="Contractor">{p.contractor}</Rij>}
           {p.startDatum && (
             <Rij label="Start">
               {new Date(p.startDatum).toLocaleDateString('nl-NL')}
@@ -177,6 +178,11 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
           </div>
         </section>
       )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ContractorCard project={p} onUpdated={herlaad} />
+        <RisicoCard project={p} onUpdated={herlaad} />
+      </div>
 
       {fout && (
         <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">

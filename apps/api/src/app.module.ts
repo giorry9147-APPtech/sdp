@@ -12,6 +12,7 @@ import { ProjectenModule } from './projecten/projecten.module';
 import { PlannenModule } from './plannen/plannen.module';
 import { DashboardsModule } from './dashboards/dashboards.module';
 import { FinancienModule } from './financien/financien.module';
+import { DcNotitiesModule } from './dc-notities/dc-notities.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { FinancienModule } from './financien/financien.module';
     PlannenModule,
     DashboardsModule,
     FinancienModule,
+    DcNotitiesModule,
   ],
 })
 export class AppModule {}

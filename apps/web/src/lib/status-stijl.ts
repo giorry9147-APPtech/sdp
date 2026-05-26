@@ -8,6 +8,7 @@ export const meldingStatusKleur: Record<string, string> = {
   IN_BEHANDELING: 'bg-amber-100 text-amber-800',
   EXTRA_INFO_NODIG: 'bg-orange-100 text-orange-800',
   OPGELOST: 'bg-emerald-100 text-emerald-800',
+  BEVESTIGD_DOOR_BURGER: 'bg-emerald-200 text-emerald-900',
   GESLOTEN: 'bg-gray-200 text-gray-700',
   HEROPEND: 'bg-red-100 text-red-800',
 };

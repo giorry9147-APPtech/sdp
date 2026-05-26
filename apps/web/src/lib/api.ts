@@ -103,16 +103,34 @@ export type ProjectLijst = {
   updatedAt: string;
 };
 
+export type ProjectRisicoStatus = 'OPEN' | 'GEMITIGEERD' | 'GEESCALEERD';
+
+export type ProjectRisico = {
+  id: number;
+  titel: string;
+  beschrijving: string;
+  mitigatie: string | null;
+  status: ProjectRisicoStatus;
+  createdAt: string;
+  updatedAt: string;
+  actor: { id: string; naam: string };
+};
+
 export type ProjectDetail = ProjectLijst & {
   beschrijving?: string | null;
   district: { id: number; code: string; naam: string };
   eindDatumWerkelijk?: string | null;
+  contractorKkfNummer?: string | null;
+  contractorContactpersoon?: string | null;
+  contractorTelefoon?: string | null;
+  contractorEmail?: string | null;
   updates: Array<{
     id: number;
     body: string;
     createdAt: string;
     actor: { id: string; naam: string };
   }>;
+  risicos: ProjectRisico[];
 };
 
 export type PlanStatus =
@@ -192,12 +210,89 @@ export type DcDashboard = {
   meldingen: {
     open: number;
     crisis: number;
-    topCategorieen30dagen: Array<{ categorie: string; aantal: number }>;
+    topCategorieen30dagen: Array<{ categorie: string; aantal: number; code?: string | null }>;
   };
   vergunningen: { open: number };
   projecten: { lopend: number };
   plannen: { concept: number; terGoedkeuring: number };
 } | null;
+
+export type TrendData = {
+  dagen: number;
+  meldingen: Array<{ datum: string; aantal: number }>;
+  vergunningen: Array<{ datum: string; aantal: number }>;
+};
+
+export type CategorieTop = Array<{ categorie: string; aantal: number; code: string | null }>;
+
+export type RecentGeslotenItem = {
+  id: number;
+  kenmerk: string;
+  titel: string;
+  status: string;
+  afgesloten: string | null;
+  categorie: string | null;
+  soort: 'melding' | 'vergunning' | 'project';
+};
+
+export type RecentGesloten = {
+  dagen: number;
+  meldingen: RecentGeslotenItem[];
+  vergunningen: RecentGeslotenItem[];
+  projecten: RecentGeslotenItem[];
+};
+
+export type MijnTaken = {
+  meldingen: Array<{
+    id: number;
+    ticketNummer: string;
+    titel: string;
+    urgentie: 'LAAG' | 'MIDDEL' | 'HOOG' | 'CRISIS';
+    status: string;
+    createdAt: string;
+    district: { naam: string };
+  }>;
+  vergunningen: Array<{
+    id: number;
+    referentie: string;
+    titel: string;
+    status: string;
+    ingediendOp: string | null;
+    district: { naam: string };
+  }>;
+  districtsplannen: Array<{
+    id: number;
+    titel: string;
+    jaar: number;
+    status: string;
+    updatedAt: string;
+    district: { naam: string };
+  }>;
+  uitgaven: Array<{
+    id: number;
+    bedrag: string | number;
+    beschrijving: string;
+    geboektOp: string;
+    fonds: { id: number; jaar: number; district: string } | null;
+  }>;
+  projecten: Array<{
+    id: number;
+    referentie: string;
+    titel: string;
+    status: string;
+    updatedAt: string;
+    district: { naam: string };
+  }>;
+  totaal: number;
+};
+
+export type DcNotitie = {
+  id: number;
+  districtId: number;
+  body: string;
+  createdAt: string;
+  actor: { id: string; naam: string };
+};
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}/api${path}`, {
@@ -226,16 +321,55 @@ export const api = {
       district: string;
       ressort?: string;
       categorie: string;
+      autoToegewezen: boolean;
+      volgToken: string | null;
     }>('/meldingen', { method: 'POST', body: JSON.stringify(payload) }),
+
+  // B1 — Bijlages (foto / PDF) bij een melding via ticketnummer
+  meldingBijlagePresign: (
+    ticket: string,
+    payload: { bestandsnaam: string; mimeType: string; grootte: number },
+  ) =>
+    request<{ fileKey: string; uploadUrl: string; expiresInSec: number; maxBytes: number }>(
+      `/meldingen/ticket/${encodeURIComponent(ticket)}/bijlages/presign`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+
+  meldingBijlageRegistreer: (
+    ticket: string,
+    payload: { fileKey: string; bestandsnaam: string; mimeType: string; grootte: number },
+  ) =>
+    request<{ id: number; soort: string; bestandsnaam: string }>(
+      `/meldingen/ticket/${encodeURIComponent(ticket)}/bijlages/registreer`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+
+  // B4 — Burger-feedback via magic-link token
+  meldingFeedback: (
+    token: string,
+    payload: { oordeel: 'BEVESTIGD' | 'NIET_OPGELOST'; opmerking?: string },
+  ) =>
+    request<{ ticketNummer: string; status: string; oordeel: string }>(
+      `/meldingen/feedback/${encodeURIComponent(token)}`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+
+  // B5 — Heropenen door burger
+  meldingHeropen: (ticket: string, payload: { reden: string }) =>
+    request<{ ticketNummer: string; status: string }>(
+      `/meldingen/ticket/${encodeURIComponent(ticket)}/heropen`,
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
 
   meldingenLijst: (
     districtId: number,
     token: string,
-    opts?: { status?: string; subregioId?: number },
+    opts?: { status?: string; subregioId?: number; ressortId?: number },
   ) => {
     const qs = new URLSearchParams({ districtId: String(districtId) });
     if (opts?.status) qs.set('status', opts.status);
     if (opts?.subregioId) qs.set('subregioId', String(opts.subregioId));
+    if (opts?.ressortId) qs.set('ressortId', String(opts.ressortId));
     return request<Array<{
       id: number;
       ticketNummer: string;
@@ -274,38 +408,151 @@ export const api = {
       ressort?: { id: number; naam: string } | null;
       categorie: { id: number; naam: string };
       toegewezenAan?: { id: string; naam: string; email: string | null } | null;
+      bijlages: Array<{
+        id: number;
+        soort: string;
+        bestandsnaam: string;
+        mimeType: string;
+        grootte: number;
+        createdAt: string;
+      }>;
       events: Array<{ type: string; payload?: unknown; createdAt: string; actor?: { id: string; naam: string } | null }>;
     }>(`/meldingen/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
     }),
+
+  meldingBijlageDownloadUrl: (meldingId: number, bijlageId: number, token: string) =>
+    request<{ url: string; bestandsnaam: string; mimeType: string }>(
+      `/meldingen/${meldingId}/bijlages/${bijlageId}/download-url`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
 
   meldingStatusWijzigen: (
     id: number,
     payload: { status: string; opmerking?: string },
     token: string,
   ) =>
-    request<{ id: number; status: string }>(`/meldingen/${id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify(payload),
-      headers: { Authorization: `Bearer ${token}` },
-    }),
+    request<{ id: number; status: string; feedbackToken: string | null }>(
+      `/meldingen/${id}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    ),
 
   meldingStatus: (ticket: string) =>
     request<{
+      id: number;
       ticketNummer: string;
-      status: string;
+      status:
+        | 'NIEUW'
+        | 'IN_BEHANDELING'
+        | 'EXTRA_INFO_NODIG'
+        | 'OPGELOST'
+        | 'BEVESTIGD_DOOR_BURGER'
+        | 'GESLOTEN'
+        | 'HEROPEND';
       titel: string;
       district: { naam: string };
       ressort: { naam: string } | null;
       categorie: { naam: string };
       createdAt: string;
       updatedAt: string;
+      burgerBevestigdOp: string | null;
+      burgerHeropendOp: string | null;
+      bijlages: Array<{ id: number; soort: string; bestandsnaam: string; mimeType: string }>;
       events: Array<{ type: string; payload: unknown; createdAt: string }>;
     }>(`/meldingen/ticket/${encodeURIComponent(ticket)}`),
-  dcDashboard: (districtId: number, token: string) =>
-    request<DcDashboard>(`/dashboards/district/${districtId}`, {
+  dcDashboard: (
+    districtId: number,
+    token: string,
+    opts?: { ressortId?: number; subregioId?: number },
+  ) => {
+    const qs = new URLSearchParams();
+    if (opts?.ressortId) qs.set('ressortId', String(opts.ressortId));
+    if (opts?.subregioId) qs.set('subregioId', String(opts.subregioId));
+    const q = qs.toString();
+    return request<DcDashboard>(
+      `/dashboards/district/${districtId}${q ? `?${q}` : ''}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+  },
+
+  dashboardTrend: (
+    districtId: number,
+    token: string,
+    opts: { dagen: number; ressortId?: number; subregioId?: number },
+  ) => {
+    const qs = new URLSearchParams({ dagen: String(opts.dagen) });
+    if (opts.ressortId) qs.set('ressortId', String(opts.ressortId));
+    if (opts.subregioId) qs.set('subregioId', String(opts.subregioId));
+    return request<TrendData>(
+      `/dashboards/district/${districtId}/trend?${qs.toString()}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+  },
+
+  dashboardCategorieTop5: (
+    districtId: number,
+    token: string,
+    opts: { dagen: number; ressortId?: number; subregioId?: number },
+  ) => {
+    const qs = new URLSearchParams({ dagen: String(opts.dagen) });
+    if (opts.ressortId) qs.set('ressortId', String(opts.ressortId));
+    if (opts.subregioId) qs.set('subregioId', String(opts.subregioId));
+    return request<CategorieTop>(
+      `/dashboards/district/${districtId}/categorie-top5?${qs.toString()}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+  },
+
+  dashboardRecentGesloten: (
+    districtId: number,
+    token: string,
+    opts: { dagen: number; ressortId?: number; subregioId?: number },
+  ) => {
+    const qs = new URLSearchParams({ dagen: String(opts.dagen) });
+    if (opts.ressortId) qs.set('ressortId', String(opts.ressortId));
+    if (opts.subregioId) qs.set('subregioId', String(opts.subregioId));
+    return request<RecentGesloten>(
+      `/dashboards/district/${districtId}/recent-gesloten?${qs.toString()}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+  },
+
+  dashboardMijnTaken: (token: string) =>
+    request<MijnTaken>(`/dashboards/mijn-taken`, {
       headers: { Authorization: `Bearer ${token}` },
     }),
+
+  // C4 — Dag-notities
+  dcNotitiesLijst: (districtId: number, token: string, limit = 10) =>
+    request<DcNotitie[]>(
+      `/dc-notities?districtId=${districtId}&limit=${limit}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+
+  dcNotitieMaak: (
+    payload: { districtId: number; body: string },
+    token: string,
+  ) =>
+    request<DcNotitie>(`/dc-notities`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  // C4 — Melding escaleren naar RO
+  meldingEscaleer: (id: number, payload: { reden: string }, token: string) =>
+    request<{ id: number; urgentie: string; geescaleerd: boolean }>(
+      `/meldingen/${id}/escaleer`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    ),
 
   // ─── Vergunningen ────────────────────────────────────────────────
   vergunningAanvragen: (payload: unknown) =>
@@ -466,11 +713,12 @@ export const api = {
   projectLijst: (
     districtId: number,
     token: string,
-    opts?: { status?: ProjectStatus; subregioId?: number },
+    opts?: { status?: ProjectStatus; subregioId?: number; ressortId?: number },
   ) => {
     const qs = new URLSearchParams({ districtId: String(districtId) });
     if (opts?.status) qs.set('status', opts.status);
     if (opts?.subregioId) qs.set('subregioId', String(opts.subregioId));
+    if (opts?.ressortId) qs.set('ressortId', String(opts.ressortId));
     return request<ProjectLijst[]>(`/projecten?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -489,6 +737,10 @@ export const api = {
       titel: string;
       beschrijving?: string;
       contractor?: string;
+      contractorKkfNummer?: string;
+      contractorContactpersoon?: string;
+      contractorTelefoon?: string;
+      contractorEmail?: string;
       budgetIndicatief?: number;
       startDatum?: string;
       eindDatumPlan?: string;
@@ -497,6 +749,48 @@ export const api = {
   ) =>
     request<ProjectDetail>('/projecten', {
       method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  // F2 — Contractor-gegevens bijwerken
+  projectContractor: (
+    id: number,
+    payload: {
+      contractor?: string;
+      contractorKkfNummer?: string;
+      contractorContactpersoon?: string;
+      contractorTelefoon?: string;
+      contractorEmail?: string;
+    },
+    token: string,
+  ) =>
+    request<ProjectDetail>(`/projecten/${id}/contractor`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  // F1 — Risico's
+  projectRisicoMaak: (
+    id: number,
+    payload: { titel: string; beschrijving: string; mitigatie?: string },
+    token: string,
+  ) =>
+    request<ProjectRisico>(`/projecten/${id}/risicos`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  projectRisicoWijzig: (
+    id: number,
+    risicoId: number,
+    payload: { status?: ProjectRisicoStatus; mitigatie?: string },
+    token: string,
+  ) =>
+    request<ProjectRisico>(`/projecten/${id}/risicos/${risicoId}`, {
+      method: 'PATCH',
       body: JSON.stringify(payload),
       headers: { Authorization: `Bearer ${token}` },
     }),

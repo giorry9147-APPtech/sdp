@@ -5,8 +5,11 @@ import {
   IsLatitude,
   IsLongitude,
   IsOptional,
+  IsPositive,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
@@ -98,4 +101,78 @@ export class ToewijzenDto {
   @ApiProperty({ description: 'Gebruiker-ID waar de melding aan toegewezen wordt' })
   @IsString()
   toegewezenAanId!: string;
+}
+
+// ─── B1 Foto-upload ──────────────────────────────────────────────────
+
+/** Toegestane MIME-types voor melding-bijlages (foto + PDF voor evt. brief). */
+export const TOEGESTANE_BIJLAGE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+] as const;
+
+export const MAX_BIJLAGES_PER_MELDING = 5;
+export const MAX_BIJLAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+export class BijlagePresignDto {
+  @ApiProperty({ description: 'Originele bestandsnaam' })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  bestandsnaam!: string;
+
+  @ApiProperty({ description: 'MIME-type — moet in TOEGESTANE_BIJLAGE_TYPES staan' })
+  @IsString()
+  @MaxLength(80)
+  mimeType!: string;
+
+  @ApiProperty({ description: 'Verwachte bestandsgrootte in bytes' })
+  @IsInt()
+  @IsPositive()
+  @Max(MAX_BIJLAGE_BYTES)
+  grootte!: number;
+}
+
+export class BijlageRegistreerDto extends BijlagePresignDto {
+  @ApiProperty({ description: 'S3-key teruggekregen van /presign' })
+  @IsString()
+  @MaxLength(500)
+  fileKey!: string;
+}
+
+// ─── B4 Burger-feedback / B5 Heropenen ───────────────────────────────
+
+export class BurgerFeedbackDto {
+  @ApiProperty({
+    enum: ['BEVESTIGD', 'NIET_OPGELOST'],
+    description: 'BEVESTIGD = probleem is verholpen, NIET_OPGELOST = terug in behandeling',
+  })
+  @IsEnum(['BEVESTIGD', 'NIET_OPGELOST'])
+  oordeel!: 'BEVESTIGD' | 'NIET_OPGELOST';
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  opmerking?: string;
+}
+
+export class HeropenDto {
+  @ApiProperty({ description: 'Toelichting waarom de burger de melding heropent' })
+  @IsString()
+  @MinLength(5)
+  @MaxLength(2000)
+  reden!: string;
+}
+
+export class EscaleerDto {
+  @ApiProperty({ description: 'Toelichting voor RO over waarom geëscaleerd wordt' })
+  @IsString()
+  @MinLength(5)
+  @MaxLength(2000)
+  reden!: string;
 }

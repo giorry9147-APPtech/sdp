@@ -25,6 +25,9 @@ type Ctx = {
   setFilterEigenSubregio: (v: boolean) => void;
   /** Convenience: effectieve subregioId voor API-calls (undefined = hele district). */
   effectiefSubregioId?: number;
+  /** C6 — handmatig gekozen ressort-filter (undefined = alle ressorten). */
+  gekozenRessortId?: number;
+  setGekozenRessortId: (id: number | undefined) => void;
   permissies: Set<string>;
   heeft: (permissie: string) => boolean;
   uitloggen: () => void;
@@ -36,6 +39,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [s, setS] = useState<Sessie | null>(null);
   const [filterEigenSubregio, setFilterEigenSubregio] = useState(true);
+  const [gekozenRessortId, setGekozenRessortId] = useState<number | undefined>();
 
   useEffect(() => {
     const huidige = sessie.get();
@@ -70,6 +74,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       setFilterEigenSubregio,
       effectiefSubregioId:
         filterEigenSubregio && activeSubregioId ? activeSubregioId : undefined,
+      gekozenRessortId,
+      setGekozenRessortId,
       permissies,
       heeft: (p: string) => permissies.has(p),
       uitloggen: () => {
@@ -77,7 +83,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         router.replace('/');
       },
     };
-  }, [s, router, filterEigenSubregio]);
+  }, [s, router, filterEigenSubregio, gekozenRessortId]);
 
   if (!ctx) {
     return (

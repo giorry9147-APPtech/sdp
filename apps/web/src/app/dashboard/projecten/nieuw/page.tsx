@@ -18,6 +18,10 @@ export default function NieuwProjectPage() {
   const [ressortId, setRessortId] = useState<number | ''>('');
   const [categorieId, setCategorieId] = useState<number | ''>('');
   const [contractor, setContractor] = useState('');
+  const [contractorKkf, setContractorKkf] = useState('');
+  const [contractorContact, setContractorContact] = useState('');
+  const [contractorTel, setContractorTel] = useState('');
+  const [contractorEmail, setContractorEmail] = useState('');
   const [budget, setBudget] = useState<number | ''>('');
   const [startDatum, setStartDatum] = useState('');
   const [eindDatumPlan, setEindDatumPlan] = useState('');
@@ -54,6 +58,10 @@ export default function NieuwProjectPage() {
           titel,
           beschrijving: beschrijving || undefined,
           contractor: contractor || undefined,
+          contractorKkfNummer: contractorKkf || undefined,
+          contractorContactpersoon: contractorContact || undefined,
+          contractorTelefoon: contractorTel || undefined,
+          contractorEmail: contractorEmail || undefined,
           budgetIndicatief: budget ? Number(budget) : undefined,
           startDatum: startDatum || undefined,
           eindDatumPlan: eindDatumPlan || undefined,
@@ -178,16 +186,59 @@ export default function NieuwProjectPage() {
           </Veld>
         </div>
 
-        <Veld label="Contractor">
-          <input
-            type="text"
-            maxLength={200}
-            value={contractor}
-            onChange={(e) => setContractor(e.target.value)}
-            className="w-full rounded border-gray-300"
-            placeholder="bv. Wanica Wegenbouw N.V."
-          />
-        </Veld>
+        <fieldset className="space-y-3 border-t pt-4">
+          <legend className="text-sm font-semibold text-gray-700">
+            Contractor <span className="font-normal text-gray-500">(optioneel)</span>
+          </legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Veld label="Bedrijfsnaam">
+              <input
+                type="text"
+                maxLength={200}
+                value={contractor}
+                onChange={(e) => setContractor(e.target.value)}
+                className="w-full rounded border-gray-300"
+                placeholder="bv. Wanica Wegenbouw N.V."
+              />
+            </Veld>
+            <Veld label="KKF-nummer">
+              <input
+                type="text"
+                maxLength={40}
+                value={contractorKkf}
+                onChange={(e) => setContractorKkf(e.target.value)}
+                className="w-full rounded border-gray-300 font-mono"
+                placeholder="bv. 12345.6"
+              />
+            </Veld>
+            <Veld label="Contactpersoon">
+              <input
+                type="text"
+                maxLength={200}
+                value={contractorContact}
+                onChange={(e) => setContractorContact(e.target.value)}
+                className="w-full rounded border-gray-300"
+              />
+            </Veld>
+            <Veld label="Telefoon">
+              <input
+                type="tel"
+                maxLength={40}
+                value={contractorTel}
+                onChange={(e) => setContractorTel(e.target.value)}
+                className="w-full rounded border-gray-300"
+              />
+            </Veld>
+            <Veld label="E-mail">
+              <input
+                type="email"
+                value={contractorEmail}
+                onChange={(e) => setContractorEmail(e.target.value)}
+                className="w-full rounded border-gray-300 sm:col-span-2"
+              />
+            </Veld>
+          </div>
+        </fieldset>
       </section>
 
       {fout && (
