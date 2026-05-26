@@ -20,10 +20,11 @@ Documentatieset voor het ontwerp en de bouw van het **Suriname Decentralisatie P
 | 05 | [Rollen & permissies](05-rollen-permissies.md) | Wie mag wat, RBAC-matrix |
 | 06 | [Features voor later (Fase 2/3)](06-features-later.md) | Wat bewust uit de MVP blijft |
 | 07 | [Aanvullend onderzoek](07-aanvullend-onderzoek.md) | Wat ontbreekt in het huidige onderzoek + aanbevelingen |
+| 08 | [WRO-compliance mapping](08-wro-compliance.md) | Per artikel Wet Regionale Organen: status MVP + gap + fase |
 
 ## Bronnen
 
-Het basisonderzoek staat in [`../AI-onderzoek.md`](../AI-onderzoek.md). De documenten in deze map bouwen daarop voort en maken het bouwbaar.
+Het basisonderzoek staat in [`../AI-onderzoek.md`](../AI-onderzoek.md). De brontekst van de Wet Regionale Organen staat in [`wet-regionale-organen.md`](wet-regionale-organen.md). De documenten in deze map bouwen daarop voort en maken het bouwbaar.
 
 ## Faseplanning samengevat
 

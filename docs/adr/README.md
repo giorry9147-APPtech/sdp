@@ -10,6 +10,7 @@ ontwikkelaars (en sessies) context hebben.
 | [0002](0002-pluggable-identity-provider.md) | Pluggable Identity Provider | geaccepteerd |
 | [0003](0003-postgis-vanaf-dag-1.md) | PostGIS vanaf dag 1 | geaccepteerd |
 | [0004](0004-ressortplan-naar-districtsplan-workflow.md) | Ressortplan → Districtsplan workflow | geaccepteerd |
+| [0005](0005-wro-compliance-strategie.md) | WRO-compliance: gefaseerde implementatie | geaccepteerd |
 
 ## Nieuwe ADR toevoegen
 

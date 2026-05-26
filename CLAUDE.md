@@ -41,6 +41,15 @@ Zie `docs/adr/` — leest snel.
 - ADR 0002: pluggable identity provider (Digitale-ID OPEN gelaten)
 - ADR 0003: PostGIS vanaf dag 1
 - ADR 0004: ressortplan → districtsplan workflow
+- ADR 0005: WRO-compliance gefaseerde implementatie
+
+## Wet Regionale Organen (WRO)
+
+Bronwet in `docs/wet-regionale-organen.md`. Per artikel: status MVP +
+gap + fase in `docs/08-wro-compliance.md`. Bij nieuwe features die WRO-
+artikelen raken: vermeld artikel-nummer in code-comment (`// WRO art. 51
+lid 1 — uiterlijk eind februari ...`) zodat grep-search werkt bij
+wetsherziening.
 
 ## Wat NIET doen
 

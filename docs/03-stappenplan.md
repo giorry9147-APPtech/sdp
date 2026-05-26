@@ -104,23 +104,29 @@ Concrete bouwvolgorde van eerste lijn code tot productie-pilot in één district
 - [ ] Multi-tenant verfijning (data-isolatie tussen districten)
 - [ ] Inheemse / Marron-dorpsbestuurslaag toevoegen (kapiteins, granmans) — zie [07](07-aanvullend-onderzoek.md)
 
-### Sprint 17–20 — Ressort- en districtsplanning (Module J)
+### Sprint 17–20 — Ressort- en districtsplanning (Module J) + WRO-uitbreidingen
 
 - [ ] Ressortplan-builder
 - [ ] Aggregatie naar districtsplan
 - [ ] Goedkeuringsflow met meerdere lagen
 - [ ] Koppeling meldingen ↔ planprioriteiten
+- [ ] **WRO art. 1 lid 2** — `WROBeleidsgebied` enum op prioriteiten (milieu, infra, agri, nuts, onderwijs, zorg, overig)
+- [ ] **WRO art. 36-45** — Districtsverordening model + workflow (CONCEPT → INGEDIEND_DR → AANGENOMEN_DR → BEKENDGEMAAKT → INGEDIEND_DNA → (geen_bezwaar | vernietigd) → VASTGESTELD_PRESIDENT → GEPUBLICEERD_STAATSBLAD). DNA-flow als stub (handmatige status-update).
+- [ ] **WRO art. 51-56** — `deadlineWettelijk` op plannen/begrotingen; dashboard-widget "wettelijke deadlines komende 30 dagen"
+- [ ] **WRO art. 53-55** — Ressort-/districtsbegroting model los van Districtsfonds
 
-### Sprint 21–24 — Financiële module (Module L)
+### Sprint 21–24 — Financiële module (Module L) + WRO-jaarverslagen
 
-- [ ] Districtsbegroting
-- [ ] Uitgavenregistratie
-- [ ] Approval-flow
-- [ ] Audit-export
+- [x] **WRO art. 40 / Wet Fid art. 40** — Districtsfonds-uitgaven met 4-ogen approval _(gedaan: vorige sessie)_
+- [x] **Audit-export CSV** voor CLAD _(gedaan: vorige sessie)_
+- [ ] Districtsbegroting-UI
+- [ ] Uitgavenregistratie uitgebreider (categorieën, periode-rapportages)
+- [ ] **WRO art. 15** — DR-jaarverslag-generator (PDF/markdown) uit audit-log + plannen + meldingen
+- [ ] **WRO art. 26** — RR-jaarverslag-generator (RR-specifiek subset)
 
 ### Sprint 25–28 — Burgerparticipatie + meertaligheid
 
-- [ ] Online consultaties
+- [ ] **WRO art. 50** — Online consultaties + communicatieproces-module
 - [ ] Sranan Tongo en Sarnami als interface-talen
 - [ ] SMS / WhatsApp Business API notificaties
 - [ ] Offline draft-mode (PWA service worker)
@@ -147,6 +153,13 @@ Concrete bouwvolgorde van eerste lijn code tot productie-pilot in één district
 - [ ] Burger-chatbot vergunning-check
 - [ ] Dossier-samenvatter
 - [ ] Patroonanalyse-dashboard
+
+### Sprint X — WRO-toezicht & escalatie
+
+- [ ] **WRO art. 34-35** — Regionale Commissaris als entity boven District (optioneel, alleen bij echte regio-vorming)
+- [ ] **WRO art. 39** — Handhaving-module: geldboete-/verbeurdverklaring-workflow (mogelijk vanuit Vergunningen-module)
+- [ ] **WRO art. 57-58** — Schorsing-workflow Minister → Staatsraad (stub, externe link)
+- [ ] **WRO art. 59-61** — Tijdelijke bevoegdheids-overdracht (RR→DR, DR→DNA-commissie, DB→DR)
 
 ---
 
