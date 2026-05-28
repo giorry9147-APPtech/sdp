@@ -13,6 +13,8 @@ import { PlannenModule } from './plannen/plannen.module';
 import { DashboardsModule } from './dashboards/dashboards.module';
 import { FinancienModule } from './financien/financien.module';
 import { DcNotitiesModule } from './dc-notities/dc-notities.module';
+import { ZaaktypenModule } from './zaaktypen/zaaktypen.module';
+import { VerzoekenModule } from './verzoeken/verzoeken.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { DcNotitiesModule } from './dc-notities/dc-notities.module';
     DashboardsModule,
     FinancienModule,
     DcNotitiesModule,
+    ZaaktypenModule,
+    VerzoekenModule,
   ],
 })
 export class AppModule {}

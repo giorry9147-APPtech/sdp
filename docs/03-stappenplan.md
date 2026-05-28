@@ -131,11 +131,77 @@ Concrete bouwvolgorde van eerste lijn code tot productie-pilot in één district
 - [ ] SMS / WhatsApp Business API notificaties
 - [ ] Offline draft-mode (PWA service worker)
 
+### Sprint 29–32 — Externe organisaties (Module P) — verzoeken & adviesverzoeken
+
+Diensten (GBB/SBB, TCT, EZ) loggen in en dienen verzoeken in bij het DC.
+Volledig ontwerp + procesonderzoek: [11-externe-organisaties.md](11-externe-organisaties.md);
+besluit: [ADR 0006](adr/0006-externe-organisaties-verzoek-workflow.md).
+Backlog: items `EO1`–`EO21` in [09-backlog.md](09-backlog.md).
+
+**Fase 2a — fundament + flagship**
+- [ ] `Organisatie`-model + seed (GBB, SBB, TCT, EZ)
+- [ ] RBAC-scope `ORGANISATIE` + rollen `extern_indiener`/`extern_beheerder` + RbacGuard-test
+- [ ] `Verzoek`-zaakmodel (event-sourced als `Melding`) + bijlages via bestaande `StorageService`
+- [ ] Dienst-portaal (nieuw-verzoek-wizard + eigen-org-lijst) + DC-inbox ("Verzoeken" + "Mijn taken")
+- [ ] **Decreet Uitgifte Domeingrond S.B. 1982 No. 11** — flagship `DOMEINGROND`-advies end-to-end (GBB → DC-advies)
+
+**Fase 2b — meer procedure-types**
+- [ ] **Wet Bedrijven en Beroepen** — `BEDRIJFSVERGUNNING` (EZ + KKF-nummer)
+- [ ] **Wet Bosbeheer S.B. 1992 No. 80** — `HOUTCONCESSIE` (SBB) + traditioneel-gezag-slot
+- [ ] TCT `BUSROUTE/STANDPLAATS` als coördinatieverzoek (géén advies-gate)
+- [ ] Advies-fan-out (N adviseurs), deadlines + reminders, organisatie-beheer-UI
+
+**Demoable:** Dienst der Domeinen dient een gronduitgifte-adviesverzoek in
+voor een perceel in Wanica; DC Wanica ziet het in de inbox, geeft binnen
+de SLA een gemotiveerd advies (positief/voorwaardelijk/negatief), de
+dienst ziet het advies in haar portaal. Alles in de audit-log.
+
+### Sprint 33–34 — Gedeeld zaak-fundament (`ZF`) — config boven code
+
+Gap uit de e-Suriname-blauwdruk ([12-blauwdruk-esuriname-g2g-c2g.md](12-blauwdruk-esuriname-g2g-c2g.md);
+gap-analyse [11](11-externe-organisaties.md) §11). **Voorwaarde voor Module Q (C2G).**
+Maakt verzoek- én verklaring-zaaktypen catalogus-gedreven.
+
+- [ ] `Zaaktype`-catalogus (data, niet code) + `ZaakEigenschap`-patroon — nieuw zaaktype = seed-rij
+- [ ] `vertrouwelijkheidaanduiding` op zaak/document + RBAC (KPS-data alleen DC-rol)
+- [ ] SLA-engine per zaaktype + auto-escalatie T-3/T+0 (bouwt op 17.7)
+- [ ] Statustransitie-validatie (geen sprongen) + identifier-standaardisatie (OIN-SR, PCN)
+- [ ] Generieke digitale handtekening (eGov-PKI-stub) + PDF/A-2 (generaliseert D5)
+
+### Sprint 35–36 — Integraties als pluggable providers (`INT`) — vervroegd
+
+CBB + KPS zijn een **dependency van VGG**. Bouw als provider-interface
+(ADR 0002-patroon): mock nu, S-Road later. Geen lock-in.
+
+- [ ] `PersonenProvider` (CBB) — NAW/woonplaats op ID-nr — mock-impl
+- [ ] `AntecedentenProvider` (KPS) — hit/no-hit, detail alleen DC-rol — mock-impl
+- [ ] `PercelenProvider` (MI-GLIS) — perceelinfo als referentie (geen kadaster) — mock-impl
+
+### Sprint 37–40 — Module Q — Burgerverklaringen (C2G), flagship VGG (`VK`)
+
+DC als **afgever** van burgerdocumenten. Flagship: **Verklaring van Goed
+Gedrag**. Grondslag samengesteld (Reglement Beheer der Districten G.B.
+1948 No. 155 + Instructie DC's S.B. 1990 No. 34) — juridisch te
+verstevigen (beleid, geen code).
+
+- [ ] `Verklaring`-zaakmodel op ZF-fundament (zaaktype `VGG_BURGER`)
+- [ ] Burger-aanvraagflow (Digitale-ID-stub → formulier → commissariaat van woonplaats)
+- [ ] Auto-verrijking CBB + KPS bij intake (via `INT`)
+- [ ] DC behandel + digitale handtekening (ZF7) → status Gereed
+- [ ] PDF/A-verklaring + QR-verificatie + publiek verificatieportaal (`/verify/:hash`)
+- [ ] Vreemdelingen-route (Commissariaat Combé), offline fallback (BIC scant in)
+- [ ] Extra C2G-verklaringen (woonplaats, verloren-ID, evenement) als catalogus-rijen
+
+**Demoable:** Burger vraagt VGG aan via portaal; systeem haalt automatisch
+CBB-uittreksel + KPS-check op; DC tekent digitaal; burger downloadt een
+PDF met QR-code die een werkgever op `/verify/:hash` kan verifiëren —
+doorlooptijd van 6 weken naar dagen.
+
 ---
 
 ## Fase 3 — GIS, AI & integraties (12+ maanden)
 
-### Sprint 29+ — GIS-viewer
+### Sprint 41+ — GIS-viewer
 
 - [ ] Kaartlagen districten + ressorten (officiële geodata van LBL / ministerie ROM)
 - [ ] Meldingen, vergunningen, projecten als overlays

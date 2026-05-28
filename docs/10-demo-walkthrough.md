@@ -33,10 +33,19 @@ Start de apps:
 pnpm dev    # api op :4000, web op :3000
 ```
 
-Login voor heel deze walkthrough:
+Login voor heel deze walkthrough (DC Wanica):
 
-- **Email:** `dc.wanica@sdp.local`
+- **Email:** `ernesto.muller@sdp.sr` — DC Wanica Zuid-Oost
 - **Wachtwoord:** `Welkom2026!`
+
+> **Let op:** het oude generieke account `dc.wanica@sdp.local` is na
+> `admin:seed-dcs` **gedeactiveerd** (status `INGETROKKEN`, login geweigerd)
+> en vervangen door realistische DC's op `@sdp.sr`. Voor Wanica zijn dat
+> `ernesto.muller@sdp.sr` (Zuid-Oost), `ravi.bhattoe@sdp.sr` (Centrum) en
+> `glenda.kranenburg@sdp.sr` (Noord-West) — alle drie zien dezelfde
+> district-brede data. Andere demo-logins: `super@sdp.local` (alles),
+> en voor de verzoeken-flow (Module P) `domeinen@gbb.sr` /
+> `beheer@gbb.sr` (externe dienst GBB).
 
 > Alle demo-meldingen + project zijn gemarkeerd met titel-prefix `[DEMO-BCF]`
 > zodat ze makkelijk te vinden zijn en bij een tweede seed-run worden vervangen.

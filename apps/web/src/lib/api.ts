@@ -283,6 +283,16 @@ export type MijnTaken = {
     updatedAt: string;
     district: { naam: string };
   }>;
+  verzoeken?: Array<{
+    id: number;
+    referentie: string;
+    onderwerp: string;
+    statusCode: string;
+    deadline: string | null;
+    zaaktype: { naam: string };
+    bronOrganisatie: { korteNaam: string | null; code: string };
+    district: { naam: string };
+  }>;
   totaal: number;
 };
 
@@ -292,6 +302,85 @@ export type DcNotitie = {
   body: string;
   createdAt: string;
   actor: { id: string; naam: string };
+};
+
+// ─── Verzoeken / zaaktypen (Module P) ────────────────────────────
+export type Zaakkanaal = 'G2G' | 'C2G';
+
+export type Zaaktype = {
+  id: number;
+  code: string;
+  naam: string;
+  kanaal: Zaakkanaal;
+  initiatorType: 'ORGANISATIE' | 'BURGER';
+  bronOrganisatieCode: string | null;
+  slaWerkdagen: number;
+  defaultVertrouwelijkheid: string;
+  wettelijkeGrondslag: string | null;
+  beschrijving: string | null;
+};
+
+export type ZaaktypeDetail = Zaaktype & {
+  statustypen: Array<{ code: string; naam: string; volgnummer: number; isEind: boolean }>;
+  resultaattypen: Array<{ code: string; naam: string }>;
+  eigenschappen: Array<{
+    code: string;
+    label: string;
+    type: 'TEKST' | 'GETAL' | 'DATUM' | 'JA_NEE' | 'KEUZE';
+    verplicht: boolean;
+    opties: string[];
+  }>;
+};
+
+export type VerzoekLijstItem = {
+  id: number;
+  referentie: string;
+  onderwerp: string;
+  statusCode: string;
+  vertrouwelijkheid: string;
+  deadline: string | null;
+  afgehandeldOp: string | null;
+  ingetrokkenOp: string | null;
+  resultaatCode: string | null;
+  createdAt: string;
+  zaaktype: { code: string; naam: string; kanaal: string };
+  district: { id: number; naam: string };
+  bronOrganisatie?: { code: string; korteNaam: string | null };
+  _count: { bijlages: number };
+};
+
+export type VerzoekDetail = {
+  id: number;
+  referentie: string;
+  statusCode: string;
+  vertrouwelijkheid: string;
+  onderwerp: string;
+  omschrijving: string;
+  locatieOmschrijving: string | null;
+  externeReferentie: string | null;
+  eigenschappen: Record<string, unknown> | null;
+  deadline: string | null;
+  afgehandeldOp: string | null;
+  ingetrokkenOp: string | null;
+  resultaatCode: string | null;
+  antwoord: string | null;
+  beantwoordOp: string | null;
+  createdAt: string;
+  zaaktype: ZaaktypeDetail;
+  bronOrganisatie: { id: number; code: string; naam: string; korteNaam: string | null };
+  district: { id: number; naam: string };
+  ressort: { id: number; naam: string } | null;
+  ingediendDoor: { id: string; naam: string } | null;
+  beantwoordDoor: { id: string; naam: string } | null;
+  bijlages: Array<{
+    id: number;
+    soort: string;
+    bestandsnaam: string;
+    mimeType: string;
+    grootte: number;
+    vertrouwelijkheid: string;
+  }>;
+  events: Array<{ type: string; payload?: unknown; createdAt: string; actor?: { id: string; naam: string } | null }>;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -552,6 +641,84 @@ export const api = {
         body: JSON.stringify(payload),
         headers: { Authorization: `Bearer ${token}` },
       },
+    ),
+
+  // ─── Verzoeken (Module P) ─────────────────────────────────────────
+  zaaktypen: (kanaal?: Zaakkanaal) =>
+    request<Zaaktype[]>(`/zaaktypen${kanaal ? `?kanaal=${kanaal}` : ''}`),
+
+  zaaktypeDetail: (code: string) =>
+    request<ZaaktypeDetail>(`/zaaktypen/${encodeURIComponent(code)}`),
+
+  verzoekIndienen: (
+    payload: {
+      zaaktypeCode: string;
+      districtId: number;
+      ressortId?: number;
+      onderwerp: string;
+      omschrijving: string;
+      locatieOmschrijving?: string;
+      externeReferentie?: string;
+      eigenschappen?: Record<string, unknown>;
+    },
+    token: string,
+  ) =>
+    request<{ referentie: string; zaaktype: string; status: string; district: string; deadline: string | null }>(
+      '/verzoeken',
+      { method: 'POST', body: JSON.stringify(payload), headers: { Authorization: `Bearer ${token}` } },
+    ),
+
+  verzoekenMijn: (token: string, opts?: { afgehandeld?: boolean; zaaktypeCode?: string }) => {
+    const qs = new URLSearchParams();
+    if (opts?.afgehandeld !== undefined) qs.set('afgehandeld', String(opts.afgehandeld));
+    if (opts?.zaaktypeCode) qs.set('zaaktypeCode', opts.zaaktypeCode);
+    const q = qs.toString();
+    return request<VerzoekLijstItem[]>(`/verzoeken/mijn${q ? `?${q}` : ''}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+
+  verzoekenInbox: (
+    districtId: number,
+    token: string,
+    opts?: { afgehandeld?: boolean; zaaktypeCode?: string },
+  ) => {
+    const qs = new URLSearchParams({ districtId: String(districtId) });
+    if (opts?.afgehandeld !== undefined) qs.set('afgehandeld', String(opts.afgehandeld));
+    if (opts?.zaaktypeCode) qs.set('zaaktypeCode', opts.zaaktypeCode);
+    return request<VerzoekLijstItem[]>(`/verzoeken/inbox?${qs.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+
+  verzoekDetail: (id: number, token: string) =>
+    request<VerzoekDetail>(`/verzoeken/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
+
+  verzoekStatus: (id: number, payload: { statusCode: string; opmerking?: string }, token: string) =>
+    request<{ referentie: string; status: string }>(`/verzoeken/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  verzoekBeantwoord: (id: number, payload: { resultaatCode: string; antwoord: string }, token: string) =>
+    request<{ referentie: string; status: string; resultaat: string }>(`/verzoeken/${id}/beantwoord`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  verzoekIntrekken: (id: number, payload: { reden?: string }, token: string) =>
+    request<{ referentie: string; ingetrokken: boolean }>(`/verzoeken/${id}/intrekken`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+
+  verzoekBijlageDownloadUrl: (id: number, bijlageId: number, token: string) =>
+    request<{ url: string; bestandsnaam: string; mimeType: string }>(
+      `/verzoeken/${id}/bijlages/${bijlageId}/download-url`,
+      { headers: { Authorization: `Bearer ${token}` } },
     ),
 
   // ─── Vergunningen ────────────────────────────────────────────────

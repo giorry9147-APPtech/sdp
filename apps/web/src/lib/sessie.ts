@@ -16,12 +16,15 @@ export type Sessie = {
     naam: string;
     rollen: Array<{
       rol: string;
-      scope: 'NATIONAAL' | 'DISTRICT' | 'RESSORT';
+      scope: 'NATIONAAL' | 'DISTRICT' | 'RESSORT' | 'ORGANISATIE';
       districtId?: number;
       ressortId?: number;
       subregioId?: number;
       subregioCode?: string;
       subregioNaam?: string;
+      organisatieId?: number;
+      organisatieCode?: string;
+      organisatieNaam?: string;
     }>;
     permissies: string[];
   };

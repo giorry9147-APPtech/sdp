@@ -277,6 +277,44 @@ Legenda: 🟢 MVP · 🟡 Fase 2 · 🔵 Fase 3
 
 ---
 
+## 🟡 P. Externe organisaties — verzoeken & adviesverzoeken
+
+**Primaire gebruikers:** externe overheidsdiensten (GBB/Dienst der Domeinen, SBB, TCT, EZ) + DC/districtssecretaris
+**Doel:** het papieren rekest-/adviesverkeer tussen nationale diensten en het districtscommissariaat digitaliseren.
+
+Volledig ontwerp + procesonderzoek: [11-externe-organisaties.md](11-externe-organisaties.md);
+besluit: [ADR 0006](adr/0006-externe-organisaties-verzoek-workflow.md).
+
+**Kernfunctionaliteit**
+- Diensten loggen in (eigen organisatie-scope) en dienen een `Verzoek` in bij een district
+- DC ontvangt in een inbox en antwoordt: **advies** (niet-bindend: positief/negatief/voorwaardelijk) of **coördinatie/kennisgeving**
+- De DC-*beslisser*-rol (bindende beschikking, bv. hindervergunning) zit al in module D (Vergunningen)
+- Generiek `Verzoek`-zaaktype met `procedureType` (DOMEINGROND, BEDRIJFSVERGUNNING, HOUTCONCESSIE, BUSROUTE, …)
+
+**Grondslag:** sectorale wetten (Decreet Uitgifte Domeingrond, Hinderwet 1929, Wet Bosbeheer), niet de WRO.
+**Flagship:** domeingrond-advies (GBB → DC). **Grenzen:** geen kadaster; binnenland-bos via traditioneel gezag; TCT = coördinatie, geen advies-gate.
+
+---
+
+## 🟡 Q. Burgerverklaringen (C2G) — DC als afgever
+
+**Primaire gebruikers:** burgers + DC/BIC/DIV (commissariaat van woonplaats)
+**Doel:** door de DC afgegeven burgerdocumenten (verklaringen) digitaliseren.
+
+Gap uit de e-Suriname-blauwdruk: [12-blauwdruk-esuriname-g2g-c2g.md](12-blauwdruk-esuriname-g2g-c2g.md).
+Gap-analyse: [11-externe-organisaties.md](11-externe-organisaties.md) §11.
+
+**Kernfunctionaliteit**
+- Burger vraagt aan (Digitale-ID); systeem verrijkt automatisch met CBB + KPS; DC tekent digitaal; PDF met QR-verificatie
+- Verschilt van meldingen (probleem) en vergunningen (toestemming): dit is een **verklaring** die de DC *afgeeft*
+- Bouwt op gedeeld catalogus-gedreven zaak-fundament (config boven code)
+
+**Flagship:** Verklaring van Goed Gedrag (VGG). **Verder:** woonplaatsverklaring, verloren-ID, evenementenvergunning.
+**Dependency:** CBB- + KPS-integratie (pluggable provider-stubs, ADR 0002-patroon).
+**Grondslag:** samengesteld (Reglement Beheer der Districten + Instructie DC's S.B. 1990 No. 34) — juridisch te verstevigen.
+
+---
+
 ## Overzicht — modules per fase
 
 | Module | MVP | Fase 2 | Fase 3 |
@@ -296,3 +334,5 @@ Legenda: 🟢 MVP · 🟡 Fase 2 · 🔵 Fase 3
 | M — GIS | (data-ready) | viewer | 🔵 |
 | N — Externe integraties | – | – | 🔵 |
 | O — AI-assistentie | – | – | 🔵 |
+| P — Externe organisaties (G2G verzoeken) | – | 🟡 | uitbr. (SSO/S-Road) |
+| Q — Burgerverklaringen (C2G, VGG) | – | 🟡 | uitbr. (machtiging) |

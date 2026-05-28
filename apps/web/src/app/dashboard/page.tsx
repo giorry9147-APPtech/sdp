@@ -7,6 +7,7 @@ import { TrendGrafiek } from './_components/trend-grafiek';
 import { MijnTakenTegel } from './_components/mijn-taken';
 import { QuickActions } from './_components/quick-actions';
 import { RecentGeslotenTegel } from './_components/recent-gesloten';
+import { DienstLanding } from './_components/dienst-landing';
 
 const TOP5_PERIODES = [
   { label: '30d', dagen: 30 },
@@ -14,7 +15,7 @@ const TOP5_PERIODES = [
 ] as const;
 
 export default function DashboardPage() {
-  const { sessie, activeDistrictId, effectiefSubregioId, gekozenRessortId, activeSubregioNaam } =
+  const { sessie, activeDistrictId, effectiefSubregioId, gekozenRessortId, activeSubregioNaam, isExtern } =
     useDashboard();
   const [data, setData] = useState<DcDashboard>(null);
   const [fout, setFout] = useState<string | null>(null);
@@ -48,6 +49,9 @@ export default function DashboardPage() {
       .then(setTop5)
       .catch(() => setTop5([]));
   }, [activeDistrictId, sessie.accessToken, top5Dagen, effectiefSubregioId, gekozenRessortId]);
+
+  // Externe-dienst-gebruiker krijgt een eigen landing (geen district-dashboard)
+  if (isExtern) return <DienstLanding />;
 
   return (
     <div className="space-y-6">

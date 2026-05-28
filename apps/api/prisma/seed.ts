@@ -11,7 +11,16 @@
  * bronnen en moeten worden gevalideerd tegen de officiële tekst van
  * S.B. 1987 No. 67. Verifieer vóór productie!
  */
-import { PrismaClient, RolScope, CategorieType } from '@prisma/client';
+import {
+  PrismaClient,
+  RolScope,
+  CategorieType,
+  OrganisatieType,
+  Zaakkanaal,
+  InitiatorType,
+  Vertrouwelijkheid,
+  EigenschapType,
+} from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -143,6 +152,24 @@ const ROLLEN: Array<{
   // Ressort
   { code: 'ressortcoordinator', naam: 'Ressortcoördinator', scope: RolScope.RESSORT, beschrijving: 'Coördinator voor één ressort' },
   { code: 'rr_lid', naam: 'Lid Ressortraad (RR)', scope: RolScope.RESSORT, beschrijving: 'Stemt op ressort-besluiten en plannen' },
+
+  // Organisatie (externe diensten — Module P / EO3)
+  { code: 'extern_indiener', naam: 'Externe indiener (dienst)', scope: RolScope.ORGANISATIE, beschrijving: 'Dient verzoeken in namens de eigen externe organisatie' },
+  { code: 'extern_beheerder', naam: 'Externe beheerder (dienst)', scope: RolScope.ORGANISATIE, beschrijving: 'Beheert gebruikers + ziet alle verzoeken van de eigen organisatie' },
+];
+
+// ─── Externe organisaties (EO1) ───────────────────────────────────────
+const ORGANISATIES: Array<{
+  code: string;
+  naam: string;
+  korteNaam: string;
+  type: OrganisatieType;
+  domeinen: string[];
+}> = [
+  { code: 'GBB', naam: 'Ministerie van Grondbeleid en Bosbeheer', korteNaam: 'Grondbeleid & Bosbeheer', type: OrganisatieType.MINISTERIE, domeinen: ['domeingrond', 'houtconcessie'] },
+  { code: 'SBB', naam: 'Stichting Bosbeheer en Bostoezicht', korteNaam: 'SBB', type: OrganisatieType.PARASTATAAL, domeinen: ['houtconcessie', 'bostoezicht'] },
+  { code: 'TCT', naam: 'Ministerie van Transport, Communicatie en Toerisme', korteNaam: 'TCT', type: OrganisatieType.MINISTERIE, domeinen: ['transport', 'standplaats', 'toerisme'] },
+  { code: 'EZ', naam: 'Ministerie van Economische Zaken, Ondernemerschap en Technologische Innovatie', korteNaam: 'Economische Zaken', type: OrganisatieType.MINISTERIE, domeinen: ['bedrijfsvergunning'] },
 ];
 
 // ─── Permissies ───────────────────────────────────────────────────────
@@ -194,6 +221,15 @@ const PERMISSIES: Array<{ code: string; beschrijving: string }> = [
   // Config
   { code: 'config.categorieen', beschrijving: 'Categorieën beheren' },
   { code: 'config.workflow', beschrijving: 'Workflow-templates wijzigen' },
+  // Externe organisaties / verzoeken (Module P — EO3)
+  { code: 'verzoek.indienen', beschrijving: 'Verzoek indienen namens externe organisatie' },
+  { code: 'verzoek.read.eigen_organisatie', beschrijving: 'Verzoeken van eigen organisatie lezen' },
+  { code: 'verzoek.intrekken', beschrijving: 'Eigen ingediend verzoek intrekken' },
+  { code: 'verzoek.read.district', beschrijving: 'Inkomende verzoeken voor eigen district lezen' },
+  { code: 'verzoek.behandel', beschrijving: 'Verzoek behandelen (status, info-vraag)' },
+  { code: 'verzoek.beantwoord', beschrijving: 'Verzoek beantwoorden met advies/beschikking' },
+  { code: 'organisatie.beheer', beschrijving: 'Externe organisaties + hun gebruikers beheren' },
+  { code: 'organisatie.gebruiker.beheer.eigen', beschrijving: 'Gebruikers van eigen organisatie beheren' },
 ];
 
 // ─── Rol → Permissies mapping ─────────────────────────────────────────
@@ -224,6 +260,7 @@ const ROL_PERMISSIES: Record<string, string[]> = {
     'fonds.goedkeur',
     'gebruiker.beheer.nationaal',
     'config.categorieen',
+    'organisatie.beheer',
   ],
 
   ro_beleidsmedewerker: [
@@ -269,6 +306,10 @@ const ROL_PERMISSIES: Record<string, string[]> = {
     'gebruiker.beheer.district',
     'audit.read.district',
     'config.categorieen',
+    // Module P — inkomende verzoeken van externe diensten (EO3)
+    'verzoek.read.district',
+    'verzoek.behandel',
+    'verzoek.beantwoord',
   ],
 
   districtssecretaris: [
@@ -288,6 +329,10 @@ const ROL_PERMISSIES: Record<string, string[]> = {
     'document.upload',
     'document.download',
     'audit.read.district',
+    // Module P — inkomende verzoeken (EO3)
+    'verzoek.read.district',
+    'verzoek.behandel',
+    'verzoek.beantwoord',
   ],
 
   vergunningmedewerker: [
@@ -297,6 +342,7 @@ const ROL_PERMISSIES: Record<string, string[]> = {
     'document.upload',
     'document.download',
     'dashboard.district',
+    'verzoek.read.district', // mag inkomende verzoeken inzien (EO3)
   ],
 
   projectmedewerker: [
@@ -348,6 +394,19 @@ const ROL_PERMISSIES: Record<string, string[]> = {
     'project.read.district',
     'ressortplan.goedkeur_rr',
   ],
+
+  // Externe diensten (Module P — EO3)
+  extern_indiener: [
+    'verzoek.indienen',
+    'verzoek.read.eigen_organisatie',
+    'verzoek.intrekken',
+  ],
+  extern_beheerder: [
+    'verzoek.indienen',
+    'verzoek.read.eigen_organisatie',
+    'verzoek.intrekken',
+    'organisatie.gebruiker.beheer.eigen',
+  ],
 };
 
 // ─── Categorieën ─────────────────────────────────────────────────────
@@ -391,6 +450,198 @@ const CATEGORIEEN_PROJECT: Array<{ code: string; naam: string }> = [
   { code: 'PRJ-LANDBOUW', naam: 'Landbouwprojecten' },
   { code: 'PRJ-BINNENLAND', naam: 'Binnenlandontwikkeling' },
   { code: 'PRJ-OVERIG', naam: 'Overig' },
+];
+
+// ─── Zaaktype-catalogus (ZF1–ZF3) ─────────────────────────────────────
+// Configuratie boven code: een nieuw verzoek-/verklaring-type toevoegen =
+// hier een rij + db:seed. `volgnummer` van statussen = array-index.
+type ZaaktypeSeed = {
+  code: string;
+  naam: string;
+  kanaal: Zaakkanaal;
+  initiatorType: InitiatorType;
+  bronOrganisatieCode?: string;
+  slaWerkdagen: number;
+  defaultVertrouwelijkheid?: Vertrouwelijkheid;
+  wettelijkeGrondslag?: string;
+  beschrijving?: string;
+  volgorde?: number;
+  statussen: Array<{ code: string; naam: string; isEind?: boolean }>;
+  resultaten: Array<{ code: string; naam: string }>;
+  eigenschappen?: Array<{
+    code: string;
+    label: string;
+    type?: EigenschapType;
+    verplicht?: boolean;
+    opties?: string[];
+  }>;
+};
+
+const ZAAKTYPEN: ZaaktypeSeed[] = [
+  // ── G2G — overheidsdienst → DC ──────────────────────────────────
+  {
+    code: 'DOMEINGROND',
+    naam: 'Terreinonderzoek t.b.v. grondaanvraag',
+    kanaal: Zaakkanaal.G2G,
+    initiatorType: InitiatorType.ORGANISATIE,
+    bronOrganisatieCode: 'GBB',
+    slaWerkdagen: 30,
+    defaultVertrouwelijkheid: Vertrouwelijkheid.INTERN,
+    wettelijkeGrondslag: 'Decreet Uitgifte Domeingrond S.B. 1982 No. 11',
+    beschrijving: 'Dienst der Domeinen vraagt DC-advies bij een gronduitgifte-aanvraag.',
+    volgorde: 1,
+    statussen: [
+      { code: 'ONTVANGEN', naam: 'Ontvangen' },
+      { code: 'TOEGEWEZEN', naam: 'Toegewezen' },
+      { code: 'VELDWERK', naam: 'Veldonderzoek' },
+      { code: 'RAPPORT_CONCEPT', naam: 'Rapport in concept' },
+      { code: 'AFGEHANDELD', naam: 'Afgehandeld', isEind: true },
+    ],
+    resultaten: [
+      { code: 'GEEN_BEZWAAR', naam: 'Geen bezwaar' },
+      { code: 'BEZWAAR', naam: 'Bezwaar' },
+      { code: 'VOORWAARDELIJK', naam: 'Voorwaardelijk advies' },
+    ],
+    eigenschappen: [
+      { code: 'LAD_nr', label: 'LAD-nummer', verplicht: true },
+      { code: 'perceel_nr', label: 'Perceelnummer' },
+      { code: 'beoogd_gebruik', label: 'Beoogd gebruik' },
+    ],
+  },
+  {
+    code: 'BEDRIJFSVERGUNNING',
+    naam: 'Lokaal advies bedrijfs-/vestigingsvergunning',
+    kanaal: Zaakkanaal.G2G,
+    initiatorType: InitiatorType.ORGANISATIE,
+    bronOrganisatieCode: 'EZ',
+    slaWerkdagen: 21,
+    wettelijkeGrondslag: 'Wet Bedrijven en Beroepen',
+    beschrijving: 'EZ/KKF vraagt DC-advies (locatie-/hindertoets) bij een bedrijfsvergunning.',
+    volgorde: 2,
+    statussen: [
+      { code: 'ONTVANGEN', naam: 'Ontvangen' },
+      { code: 'LOCATIEBEZOEK', naam: 'Locatiebezoek' },
+      { code: 'AFGEHANDELD', naam: 'Afgehandeld', isEind: true },
+    ],
+    resultaten: [
+      { code: 'POSITIEF', naam: 'Positief' },
+      { code: 'NEGATIEF', naam: 'Negatief' },
+      { code: 'VOORWAARDEN', naam: 'Met voorwaarden' },
+    ],
+    eigenschappen: [
+      { code: 'kkf_nummer', label: 'KKF-nummer', verplicht: true },
+      { code: 'locatie', label: 'Vestigingslocatie' },
+    ],
+  },
+  {
+    code: 'HOUTCONCESSIE',
+    naam: 'Advies kapvergunning / houtconcessie',
+    kanaal: Zaakkanaal.G2G,
+    initiatorType: InitiatorType.ORGANISATIE,
+    bronOrganisatieCode: 'SBB',
+    slaWerkdagen: 21,
+    wettelijkeGrondslag: 'Wet Bosbeheer S.B. 1992 No. 80',
+    beschrijving: 'SBB kan DC-advies vragen bij een kap-/concessie-aanvraag.',
+    volgorde: 3,
+    statussen: [
+      { code: 'ONTVANGEN', naam: 'Ontvangen' },
+      { code: 'VELDCONTROLE', naam: 'Veldcontrole' },
+      { code: 'AFGEHANDELD', naam: 'Afgehandeld', isEind: true },
+    ],
+    resultaten: [
+      { code: 'POSITIEF', naam: 'Positief' },
+      { code: 'NEGATIEF', naam: 'Negatief' },
+    ],
+    eigenschappen: [
+      { code: 'perceel_nr', label: 'Perceel / terrein' },
+      { code: 'doel', label: 'Doel' },
+      { code: 'trad_gezag_geraadpleegd', label: 'Traditioneel gezag geraadpleegd', type: EigenschapType.JA_NEE },
+    ],
+  },
+  {
+    code: 'BUSROUTE_STANDPLAATS',
+    naam: 'Coördinatie route-/standplaatsvergunning openbaar vervoer',
+    kanaal: Zaakkanaal.G2G,
+    initiatorType: InitiatorType.ORGANISATIE,
+    bronOrganisatieCode: 'TCT',
+    slaWerkdagen: 14,
+    beschrijving: 'TCT stemt af met DC over busroutes/standplaatsen (kennisgeving, geen wettelijke advies-gate).',
+    volgorde: 4,
+    statussen: [
+      { code: 'ONTVANGEN', naam: 'Ontvangen' },
+      { code: 'ONDERZOEK', naam: 'Onderzoek' },
+      { code: 'AFGEHANDELD', naam: 'Afgehandeld', isEind: true },
+    ],
+    resultaten: [
+      { code: 'GEEN_BEZWAAR', naam: 'Geen bezwaar' },
+      { code: 'BEZWAAR', naam: 'Bezwaar' },
+    ],
+    eigenschappen: [{ code: 'traject', label: 'Traject / standplaats' }],
+  },
+  // ── C2G — burger → DC ───────────────────────────────────────────
+  {
+    code: 'VGG',
+    naam: 'Verklaring van Goed Gedrag',
+    kanaal: Zaakkanaal.C2G,
+    initiatorType: InitiatorType.BURGER,
+    slaWerkdagen: 5,
+    defaultVertrouwelijkheid: Vertrouwelijkheid.VERTROUWELIJK,
+    wettelijkeGrondslag:
+      'Reglement Beheer der Districten G.B. 1948 No. 155 + Instructie DC\'s S.B. 1990 No. 34',
+    beschrijving: 'Burger vraagt VGG aan; DC geeft af na CBB- + KPS-check.',
+    volgorde: 10,
+    statussen: [
+      { code: 'ONTVANGEN', naam: 'Ontvangen' },
+      { code: 'AUTO_VERRIJKING', naam: 'Verrijking CBB/KPS' },
+      { code: 'IN_BEHANDELING', naam: 'In behandeling' },
+      { code: 'ONDERTEKEND', naam: 'Ondertekend' },
+      { code: 'GEREED', naam: 'Gereed', isEind: true },
+    ],
+    resultaten: [
+      { code: 'VGG_AFGEGEVEN', naam: 'VGG afgegeven' },
+      { code: 'VGG_GEWEIGERD', naam: 'VGG geweigerd' },
+    ],
+    eigenschappen: [
+      {
+        code: 'doel',
+        label: 'Doel van de verklaring',
+        type: EigenschapType.KEUZE,
+        verplicht: true,
+        opties: ['werk', 'studie', 'visum', 'verblijfsvergunning', 'overig'],
+      },
+    ],
+  },
+  {
+    code: 'WOONPLAATSVERKLARING',
+    naam: 'Verklaring van woonplaats',
+    kanaal: Zaakkanaal.C2G,
+    initiatorType: InitiatorType.BURGER,
+    slaWerkdagen: 3,
+    defaultVertrouwelijkheid: Vertrouwelijkheid.VERTROUWELIJK,
+    beschrijving: 'Burger vraagt woonplaatsverklaring aan (CBB-bron).',
+    volgorde: 11,
+    statussen: [
+      { code: 'ONTVANGEN', naam: 'Ontvangen' },
+      { code: 'VERIFICATIE', naam: 'Verificatie' },
+      { code: 'GEREED', naam: 'Gereed', isEind: true },
+    ],
+    resultaten: [{ code: 'AFGEGEVEN', naam: 'Afgegeven' }],
+  },
+  {
+    code: 'VERLOREN_ID',
+    naam: 'Verklaring verloren ID-kaart',
+    kanaal: Zaakkanaal.C2G,
+    initiatorType: InitiatorType.BURGER,
+    slaWerkdagen: 1,
+    defaultVertrouwelijkheid: Vertrouwelijkheid.VERTROUWELIJK,
+    beschrijving: 'Burger meldt verlies ID; DC geeft verklaring (KPS-aangifte als bron).',
+    volgorde: 12,
+    statussen: [
+      { code: 'ONTVANGEN', naam: 'Ontvangen' },
+      { code: 'GEREED', naam: 'Gereed', isEind: true },
+    ],
+    resultaten: [{ code: 'AFGEGEVEN', naam: 'Afgegeven' }],
+  },
 ];
 
 async function main() {
@@ -493,6 +744,68 @@ async function main() {
     });
   }
 
+  // Externe organisaties (EO1)
+  console.log('  ▸ Externe organisaties');
+  for (const o of ORGANISATIES) {
+    await prisma.organisatie.upsert({
+      where: { code: o.code },
+      update: { naam: o.naam, korteNaam: o.korteNaam, type: o.type, domeinen: o.domeinen },
+      create: { code: o.code, naam: o.naam, korteNaam: o.korteNaam, type: o.type, domeinen: o.domeinen },
+    });
+  }
+
+  // Zaaktype-catalogus (ZF1–ZF3) — idempotent: upsert zaaktype, herzet kinderen
+  console.log('  ▸ Zaaktype-catalogus');
+  for (const zt of ZAAKTYPEN) {
+    const data = {
+      naam: zt.naam,
+      kanaal: zt.kanaal,
+      initiatorType: zt.initiatorType,
+      bronOrganisatieCode: zt.bronOrganisatieCode ?? null,
+      slaWerkdagen: zt.slaWerkdagen,
+      defaultVertrouwelijkheid: zt.defaultVertrouwelijkheid ?? Vertrouwelijkheid.INTERN,
+      wettelijkeGrondslag: zt.wettelijkeGrondslag ?? null,
+      beschrijving: zt.beschrijving ?? null,
+      volgorde: zt.volgorde ?? 0,
+    };
+    const zaaktype = await prisma.zaaktype.upsert({
+      where: { code: zt.code },
+      update: data,
+      create: { code: zt.code, ...data },
+    });
+
+    // Kinderen idempotent herzetten
+    await prisma.statustype.deleteMany({ where: { zaaktypeId: zaaktype.id } });
+    await prisma.resultaattype.deleteMany({ where: { zaaktypeId: zaaktype.id } });
+    await prisma.eigenschap.deleteMany({ where: { zaaktypeId: zaaktype.id } });
+
+    await prisma.statustype.createMany({
+      data: zt.statussen.map((s, i) => ({
+        zaaktypeId: zaaktype.id,
+        code: s.code,
+        naam: s.naam,
+        volgnummer: i + 1,
+        isEind: s.isEind ?? false,
+      })),
+    });
+    await prisma.resultaattype.createMany({
+      data: zt.resultaten.map((r) => ({ zaaktypeId: zaaktype.id, code: r.code, naam: r.naam })),
+    });
+    if (zt.eigenschappen?.length) {
+      await prisma.eigenschap.createMany({
+        data: zt.eigenschappen.map((e, i) => ({
+          zaaktypeId: zaaktype.id,
+          code: e.code,
+          label: e.label,
+          type: e.type ?? EigenschapType.TEKST,
+          verplicht: e.verplicht ?? false,
+          volgnummer: i + 1,
+          opties: e.opties ?? [],
+        })),
+      });
+    }
+  }
+
   // Stats
   const counts = {
     districten: await prisma.district.count(),
@@ -500,6 +813,8 @@ async function main() {
     rollen: await prisma.rol.count(),
     permissies: await prisma.permissie.count(),
     categorieen: await prisma.categorie.count(),
+    organisaties: await prisma.organisatie.count(),
+    zaaktypen: await prisma.zaaktype.count(),
   };
   console.log('✓ Seed klaar:', counts);
 }

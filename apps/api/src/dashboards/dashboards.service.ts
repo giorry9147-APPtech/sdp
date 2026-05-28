@@ -436,6 +436,30 @@ export class DashboardsService {
           })
         : [];
 
+    // Inkomende verzoeken van externe diensten, nog niet afgehandeld (EO9)
+    const verzoeken =
+      permissies.has('verzoek.behandel') && rolDistrictIds.length > 0
+        ? await this.prisma.verzoek.findMany({
+            where: {
+              districtId: { in: rolDistrictIds },
+              afgehandeldOp: null,
+              ingetrokkenOp: null,
+            },
+            orderBy: [{ deadline: 'asc' }, { createdAt: 'asc' }],
+            take: 15,
+            select: {
+              id: true,
+              referentie: true,
+              onderwerp: true,
+              statusCode: true,
+              deadline: true,
+              zaaktype: { select: { naam: true } },
+              bronOrganisatie: { select: { korteNaam: true, code: true } },
+              district: { select: { naam: true } },
+            },
+          })
+        : [];
+
     return {
       meldingen,
       vergunningen,
@@ -454,12 +478,14 @@ export class DashboardsService {
           : null,
       })),
       projecten,
+      verzoeken,
       totaal:
         meldingen.length +
         vergunningen.length +
         districtsplannen.length +
         uitgaven.length +
-        projecten.length,
+        projecten.length +
+        verzoeken.length,
     };
   }
 

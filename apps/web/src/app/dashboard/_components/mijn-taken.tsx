@@ -153,6 +153,26 @@ export function MijnTakenTegel() {
           ))}
         </Groep>
       )}
+
+      {data.verzoeken && data.verzoeken.length > 0 && (
+        <Groep titel="Verzoeken van externe diensten">
+          {data.verzoeken.map((v) => (
+            <Link
+              key={v.id}
+              href={`/dashboard/verzoeken/${v.id}`}
+              className="flex items-baseline justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-gray-50"
+            >
+              <span className="truncate">
+                <span className="font-mono text-[10px] text-gray-500">{v.referentie}</span>{' '}
+                {v.onderwerp}
+              </span>
+              <span className="shrink-0 text-xs text-gray-500">
+                {v.bronOrganisatie.korteNaam ?? v.bronOrganisatie.code} · {v.statusCode}
+              </span>
+            </Link>
+          ))}
+        </Groep>
+      )}
     </section>
   );
 }

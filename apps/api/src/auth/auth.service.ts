@@ -134,6 +134,7 @@ export class AuthService {
               },
             },
             subregio: { select: { code: true, naam: true } },
+            organisatie: { select: { code: true, naam: true, korteNaam: true } },
           },
         },
       },
@@ -151,6 +152,9 @@ export class AuthService {
       subregioId: gr.subregioId ?? undefined,
       subregioCode: gr.subregio?.code,
       subregioNaam: gr.subregio?.naam,
+      organisatieId: gr.organisatieId ?? undefined,
+      organisatieCode: gr.organisatie?.code,
+      organisatieNaam: gr.organisatie?.korteNaam ?? gr.organisatie?.naam,
     }));
 
     const permissies = new Set<string>();

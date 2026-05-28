@@ -20,6 +20,7 @@ type DemoUser = {
     rolCode: string;
     districtCode?: string;
     ressortCode?: string;
+    organisatieCode?: string;
   }>;
 };
 
@@ -82,6 +83,18 @@ const USERS: DemoUser[] = [
     naam: 'CLAD Auditor',
     rollen: [{ rolCode: 'auditor' }],
   },
+  // Externe diensten (Module P — EO3). Loggen in op dezelfde auth-laag,
+  // maar met scope ORGANISATIE i.p.v. district.
+  {
+    email: 'domeinen@gbb.sr',
+    naam: 'Dienst der Domeinen (GBB)',
+    rollen: [{ rolCode: 'extern_indiener', organisatieCode: 'GBB' }],
+  },
+  {
+    email: 'beheer@gbb.sr',
+    naam: 'Beheerder GBB',
+    rollen: [{ rolCode: 'extern_beheerder', organisatieCode: 'GBB' }],
+  },
 ];
 
 async function main() {
@@ -127,6 +140,7 @@ async function main() {
 
         let districtId: number | undefined;
         let ressortId: number | undefined;
+        let organisatieId: number | undefined;
 
         if (rolToewijzing.districtCode) {
           const d = await prisma.district.findUnique({
@@ -145,12 +159,21 @@ async function main() {
           ressortId = r.id;
         }
 
+        if (rolToewijzing.organisatieCode) {
+          const o = await prisma.organisatie.findUnique({
+            where: { code: rolToewijzing.organisatieCode },
+          });
+          if (!o) throw new Error(`Organisatie ${rolToewijzing.organisatieCode} niet gevonden`);
+          organisatieId = o.id;
+        }
+
         const bestaande = await prisma.gebruikerRol.findFirst({
           where: {
             gebruikerId: gebruiker.id,
             rolId: rol.id,
             districtId: districtId ?? null,
             ressortId: ressortId ?? null,
+            organisatieId: organisatieId ?? null,
             OR: [{ geldigTot: null }, { geldigTot: { gt: new Date() } }],
           },
         });
@@ -162,6 +185,7 @@ async function main() {
               rolId: rol.id,
               districtId,
               ressortId,
+              organisatieId,
             },
           });
         }
@@ -175,9 +199,12 @@ async function main() {
     console.log(`  ${DEMO_WACHTWOORD}`);
     console.log('');
     console.log('Probeer:');
-    console.log('  dc.wanica@sdp.local                — DC dashboard Wanica');
-    console.log('  rc.lelydorp@sdp.local              — ressortplan opstellen');
     console.log('  super@sdp.local                    — alles');
+    console.log('  rc.lelydorp@sdp.local              — ressortplan opstellen');
+    console.log('  domeinen@gbb.sr                    — externe dienst, verzoek indienen (Module P)');
+    console.log('');
+    console.log('DC-accounts komen uit `admin:seed-dcs` (realistisch, @sdp.sr), bv.:');
+    console.log('  ernesto.muller@sdp.sr              — DC Wanica Zuid-Oost');
   } finally {
     await prisma.$disconnect();
   }

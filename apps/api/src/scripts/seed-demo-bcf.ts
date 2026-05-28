@@ -92,6 +92,22 @@ async function projectRef(districtCode: string): Promise<string> {
   return `PRJ-${new Date().getFullYear()}-${districtCode}-${nanoPrj()}`;
 }
 
+/**
+ * Vind een ACTIEVE DC van Wanica. Na `admin:seed-dcs` is dat een
+ * realistisch account (bv. Ernesto Muller); het oude `dc.wanica@sdp.local`
+ * is dan INGETROKKEN. Valt daarop terug als seed-dcs nog niet draaide.
+ */
+async function vindActieveDcWanica(districtId: number) {
+  const dcRol = await prisma.rol.findUnique({ where: { code: 'dc' } });
+  if (!dcRol) return null;
+  const gr = await prisma.gebruikerRol.findFirst({
+    where: { rolId: dcRol.id, districtId, gebruiker: { status: 'ACTIEF' } },
+    include: { gebruiker: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  return gr?.gebruiker ?? null;
+}
+
 // ─── Demo-data opruimen ───────────────────────────────────────────
 
 async function ruimEerderOp() {
@@ -376,9 +392,7 @@ async function seedDashboardData(districtId: number, districtCode: string) {
   console.log('\n═══ C. DC-dashboard ═════════════════════════════════════');
 
   const cats = await prisma.categorie.findMany({ where: { type: 'MELDING' } });
-  const dcWanica = await prisma.gebruiker.findFirst({
-    where: { naam: { contains: 'DC Wanica' } },
-  });
+  const dcWanica = await vindActieveDcWanica(districtId);
   const ressorten = await prisma.ressort.findMany({ where: { districtId } });
 
   // C1 + C2 + C5 + C6 — spread van ~40 meldingen over 90 dagen
@@ -467,9 +481,7 @@ async function seedDashboardData(districtId: number, districtCode: string) {
 async function seedProjectMonitoring(districtId: number, districtCode: string) {
   console.log('\n═══ F. Projectmonitoring ═══════════════════════════════');
 
-  const dcWanica = await prisma.gebruiker.findFirst({
-    where: { naam: { contains: 'DC Wanica' } },
-  });
+  const dcWanica = await vindActieveDcWanica(districtId);
   const projCat = await prisma.categorie.findFirst({
     where: { type: 'PROJECT', code: 'PRJ-WEG' },
   });
@@ -567,7 +579,7 @@ async function main() {
   console.log(`  ${notitieCount.toString().padStart(3)} DC-notities`);
   console.log(`  ${risicoCount.toString().padStart(3)} project-risicos`);
   console.log('\n📖 Walkthrough: docs/10-demo-walkthrough.md');
-  console.log('🌐 Open: http://localhost:3000/dashboard (login: dc.wanica@sdp.local / Welkom2026!)');
+  console.log('🌐 Open: http://localhost:3000/dashboard (login: ernesto.muller@sdp.sr / Welkom2026!)');
 }
 
 main()

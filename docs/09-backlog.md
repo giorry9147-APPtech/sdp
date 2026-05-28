@@ -186,6 +186,105 @@ Zodra H1 (SMTP) live is, gaat de email automatisch.
 | 25.7 | **Push notifications** via PWA | ❌ | M | — |
 | 25.8 | **Offline draft-mode** (service worker + IndexedDB voor melding-drafts) | ❌ | L | — |
 
+### Sprint 29–32: Externe organisaties — verzoeken & adviesverzoeken (Module P)
+
+> Volledig ontwerp + procesonderzoek: [11-externe-organisaties.md](11-externe-organisaties.md).
+> Architectuurbesluit: [ADR 0006](adr/0006-externe-organisaties-verzoek-workflow.md).
+> Diensten (GBB/SBB, TCT, EZ) loggen in en dienen verzoeken in bij het DC;
+> de DC antwoordt met advies (niet-bindend) of behandelt/coördineert.
+> Juridische grondslag = **sectorale wetten**, niet WRO. (Item-prefix `EO`
+> = Externe Organisaties; "Module P" want A–O zijn vergeven in
+> [02-componenten.md](02-componenten.md).)
+
+#### Fase 2a — Fundament + flagship domeingrond-advies
+
+| # | Item | Status | Effort | Grondslag |
+|---|------|--------|--------|-----------|
+| EO1 | **`Organisatie` model** (code/naam/type/domeinen) + seed GBB, SBB, TCT, EZ | ✅ | S | — |
+| EO2 | **RBAC-scope `ORGANISATIE`** + `organisatieId` op `GebruikerRol` + `AuthenticatedUser` + RbacGuard scope-check | ✅ | M | — |
+| EO3 | **Rollen `extern_indiener` + `extern_beheerder`** + permissies (`verzoek.*`, `organisatie.beheer`) in seed | ✅ | S | — |
+| EO4 | **`Verzoek` zaakmodel** (+ `VerzoekEvent`, `VerzoekBijlage`) — event-sourced als `Melding`, catalogus-gedreven (zaaktypeId + ZF2-eigenschappen + ZF3-vertrouwelijkheid) | ✅ | M | — |
+| EO5 | **Verzoek-API** indienen / lijst-eigen-org / detail / intrekken (scope ORGANISATIE) | ✅ | M | — |
+| EO6 | **Verzoek-API DC-kant** inbox-lijst (scope DISTRICT) / behandel / `verzoek.beantwoord` (oordeel + motivatie) | ✅ | M | Decreet Uitgifte Domeingrond S.B. 1982 No. 11 |
+| EO7 | **Bijlages bij verzoek** via bestaande `StorageService` (presigned S3) | ✅ | S | hergebruik B1 |
+| EO8 | **Dienst-portaal UI** — landing (eigen-org KPI's) + "nieuw verzoek"-wizard + eigen-verzoeken-lijst | ✅ | M | — |
+| EO9 | **DC-inbox UI** — "Verzoeken"-nav + detail + antwoord-formulier; meetellen in "Mijn taken" (C3) | ✅ | M | — |
+| EO10 | **Flagship: `procedureType=DOMEINGROND`** end-to-end (GBB dient in → DC adviseert positief/negatief/voorwaardelijk) | ❌ | S | Decreet Uitgifte Domeingrond |
+| EO11 | **Audit + statusflow-tests** (dienst ziet nooit district-data; DC ziet nooit andere districten) | ❌ | S | — |
+
+#### Fase 2b — Meer procedure-types + verfijning
+
+| # | Item | Status | Effort | Grondslag |
+|---|------|--------|--------|-----------|
+| EO12 | **`procedureType` BEDRIJFSVERGUNNING** (EZ) + KKF-nummer-veld | ❌ | S | Wet Bedrijven en Beroepen |
+| EO13 | **`procedureType` HOUTCONCESSIE** (SBB) + "traditioneel gezag geraadpleegd"-slot | ❌ | M | Wet Bosbeheer S.B. 1992 No. 80 |
+| EO14 | **`procedureType` BUSROUTE/STANDPLAATS** (TCT) als `COORDINATIEVERZOEK` (kennisgeving, geen advies-gate) | ❌ | S | — |
+| EO15 | **Advies-fan-out** — één procedure → N adviseurs (DC + andere diensten) met deelstatussen | ❌ | L | — |
+| EO16 | **Deadlines + reminders** op adviesverzoeken (koppelt aan 17.7 deadline-widget) | ❌ | M | — |
+| EO17 | **Organisatie-beheer-UI** (super_admin/RO: orgs + hun gebruikers aanmaken/deactiveren) | ❌ | M | — |
+| EO18 | **Demo-seed `admin:seed-demo-org`** — voorbeelddiensten + verzoeken in alle statussen | ❌ | S | — |
+
+#### Fase 3 — e-Suriname-integratie
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| EO19 | **Digitale-ID SSO** voor dienst-gebruikers (OIDC-provider activeren via ADR 0002-laag) | ❌ | L |
+| EO20 | **`Verzoek` → ZGW/OpenZaak-SR `zaak`-mapping** + advies-output als `besluit`/`resultaat` | ❌ | L |
+| EO21 | **Uitwisseling over S-Road** i.p.v. directe login (dienst gebruikt eigen systeem) | ❌ | XL |
+| EO22 | **Notificaties-API + async callback** naar bron-ministerie bij resultaat (geen polling) | ❌ | M |
+
+### Sprint 33–34: Gedeeld zaak-fundament (`ZF`) — config boven code
+
+> Gap uit de e-Suriname-blauwdruk ([12-blauwdruk-esuriname-g2g-c2g.md](12-blauwdruk-esuriname-g2g-c2g.md)),
+> gap-analyse in [11-externe-organisaties.md](11-externe-organisaties.md) §11.
+> Maakt G2G (`Verzoek`) én C2G (`Verklaring`) catalogus-gedreven, zodat een
+> nieuw zaaktype een seed-rij is i.p.v. een release. **Voorwaarde voor Module Q.**
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| ZF1 | **`Zaaktype`-catalogus** (code, naam, initiator, SLA-dagen, statussen, resultaattypen) als data-model + seed | ✅ | M |
+| ZF2 | **`ZaakEigenschap`-patroon** — zaaktype-specifieke velden los van de hoofdtabel (bv. `LAD_nr`, `perceel_nr`, `doel_VGG`) | ✅ | M |
+| ZF3 | **`vertrouwelijkheidaanduiding`** (openbaar/intern/vertrouwelijk/confidentieel) op zaak + document + RBAC-check (KPS-data alleen DC-rol) | ✅ | M |
+| ZF4 | **SLA-engine** — per zaaktype deadline afleiden + auto-escalatie T-3 (notificatie) + markeer `overschreden` T+0 (bouwt op 17.7) | ❌ | M |
+| ZF5 | **Statustransitie-validatie** — status alleen via vooraf gedefinieerd pad (geen sprongen), afgedwongen op zaaktype-statusvolgorde | ❌ | S |
+| ZF6 | **Identifier-standaardisatie** — `OIN-SR` op `Organisatie`, `PCN` (persoonsnummer) op burger-betrokkene | ❌ | S |
+| ZF7 | **Generieke digitale handtekening** (eGov-PKI-stub) + PDF/A-2 export — generaliseer D5 voor verklaring/advies/beschikking | ❌ | M |
+
+### Sprint 35–38: Module Q — Burgerverklaringen (C2G), flagship VGG (`VK`)
+
+> DC als **afgever** van burgerdocumenten (verklaringen) — fundamenteel
+> anders dan meldingen/vergunningen. Flagship: **Verklaring van Goed Gedrag (VGG)**.
+> Bouwt op `ZF`-fundament + `INT`-integraties. Grondslag samengesteld
+> (Reglement Beheer der Districten G.B. 1948 No. 155 + Instructie DC's
+> S.B. 1990 No. 34) — juridisch te verstevigen (beleid).
+
+| # | Item | Status | Effort | Grondslag |
+|---|------|--------|--------|-----------|
+| VK1 | **`Verklaring` zaakmodel** op ZF-fundament (zaaktype `VGG_BURGER`, statussen, resultaat afgegeven/geweigerd) | ❌ | M | — |
+| VK2 | **Burger-aanvraagflow VGG** (login Digitale-ID-stub → formulier → doel → commissariaat van woonplaats) | ❌ | M | — |
+| VK3 | **Auto-verrijking** — bij intake CBB-uittreksel (NAW/woonplaats) + KPS hit/no-hit aanhangen (via `INT`) | ❌ | M | Politiehandvest G.B. 1971 No. 70 |
+| VK4 | **DC-behandel + onderteken** — BIC-review → DIV-opmaak → DC digitale handtekening (ZF7) → status Gereed | ❌ | M | Instructie DC's S.B. 1990 No. 34 |
+| VK5 | **PDF/A-verklaring + QR-verificatie** — download met QR naar `verify.gov.sr/vgg/{hash}` | ❌ | M | — |
+| VK6 | **Publiek verificatieportaal** (`/verify/:hash`) — derde partij checkt echtheid zonder commissariaat | ❌ | S | — |
+| VK7 | **Vreemdelingen-route** — VGG via Commissariaat Combé i.p.v. woonplaats | ❌ | S | Vreemdelingenwet 1991 S.B. 1992 No. 33 |
+| VK8 | **Offline fallback** — BIC scant papieren aanvraag in als zaak (offline-burger telt mee) | ❌ | S | — |
+| VK9 | **Extra C2G-verklaringen** — woonplaatsverklaring, verloren-ID-verklaring, evenementenvergunning (catalogus-rijen) | ❌ | M | — |
+| VK10 | **Machtiging** (`burger_gemachtigde`) — aanvraag namens ander via eGov-machtigingsregister | ❌ | M | Fase 3 |
+| VK11 | **Demo-seed `admin:seed-demo-verklaring`** — voorbeeld-VGG's in alle statussen | ❌ | S | — |
+
+### Integraties als pluggable providers (`INT`) — vervroegd van Fase 3
+
+> Blauwdruk maakt CBB + KPS een **dependency van VGG** (auto-verrijking).
+> Bouw als provider-interface met mock-impl nu, S-Road-impl later
+> (ADR 0002-patroon). Geen lock-in. Raakt ook Module N.
+
+| # | Item | Status | Effort |
+|---|------|--------|--------|
+| INT1 | **`PersonenProvider`-interface** (CBB) + mock-impl (NAW/woonplaats/burgerlijke staat op ID-nr) | ❌ | M |
+| INT2 | **`AntecedentenProvider`-interface** (KPS) + mock-impl (hit/no-hit; detail alleen DC-rol) | ❌ | M |
+| INT3 | **`PercelenProvider`-interface** (MI-GLIS) + mock-impl (perceelinfo als referentie, geen kadaster) | ❌ | M |
+| INT4 | **S-Road-adapter** — vervang mocks door echte X-Road service-consumers (mTLS + OAuth2 client-credentials) | ❌ | XL |
+
 ### Cross-cutting Fase 2
 
 | # | Item | Status | Effort |
@@ -220,7 +319,29 @@ Zodra H1 (SMTP) live is, gaat de email automatisch.
 11. **17.6 Districtsverordening** (grootste WRO-gap)
 12. **17.8 Begrotingen los van fonds**
 13. **21.5-6 Jaarverslagen**
-14. **25.x burgerparticipatie + meertaligheid**
+14. **EO1-EO11 Externe organisaties** (Module P) — diensten dienen verzoeken in bij DC; flagship domeingrond-advies (GBB). Hoge bestuurlijke waarde, hergebruikt bestaand zaakmodel.
+15. **25.x burgerparticipatie + meertaligheid**
+
+### Verzoek-/verklaring-spoor (e-Suriname-blauwdruk) — bouwvolgorde
+
+> De gap-analyse ([11](11-externe-organisaties.md) §11) tegen de blauwdruk
+> ([12](12-blauwdruk-esuriname-g2g-c2g.md)) geeft een **harde afhankelijkheidsketen**.
+> Bouw in deze volgorde; sla geen stap over:
+
+```
+EO1-EO3 (Organisatie + scope + rollen)         ──┐
+ZF1-ZF7 (catalogus-gedreven zaak-fundament)    ──┤→ EO4-EO11  (G2G Verzoek, flagship DOMEINGROND)
+INT1-INT2 (CBB + KPS provider-stubs)           ──┤
+                                                 └→ VK1-VK8   (C2G Verklaring, flagship VGG)
+```
+
+- **Begin hier:** `EO1`–`EO3` (Organisatie/scope/rollen) zijn de fundering
+  voor zowel G2G als C2G. Bouw daarna `ZF1`–`ZF3` (catalogus +
+  vertrouwelijkheid) — die keuze betaalt zich terug bij élk volgend zaaktype.
+- **G2G eerst** (`EO4`–`EO11`, flagship domeingrond) want geen externe
+  integratie nodig — alleen interne workflow.
+- **C2G daarna** (`VK1`–`VK8`, flagship VGG) want dat hangt op `INT1`/`INT2`
+  (CBB/KPS) + `ZF7` (digitale handtekening).
 
 ---
 
@@ -234,6 +355,13 @@ Zodra H1 (SMTP) live is, gaat de email automatisch.
 ## 5. Totaal-schatting
 
 **MVP afmaken:** ~6-8 weken solo / 3-4 weken met 2 engineers (zonder pilot-voorbereiding) + 2 weken pilot.
-**Fase 2 volledig:** ~6 maanden met 2-3 engineers (per sprint-cluster opbrengbaar als release).
+**Fase 2 volledig:** ~7-9 maanden met 2-3 engineers (per sprint-cluster opbrengbaar als release).
+- Module P (G2G externe organisaties): ~3-4 weken fundament + flagship
+- Zaak-fundament `ZF` + integratie-stubs `INT`: ~3-4 weken (eenmalig, betaalt zich terug per zaaktype)
+- Module Q (C2G burgerverklaringen, VGG-flagship): ~4-6 weken (incl. CBB/KPS-mocks + handtekening + QR)
 
-Bij sessies van een paar uur per dag: MVP-restant ~3-4 maanden, Fase 2 ~12 maanden.
+**e-Suriname noordster** (OpenZaak-SR draaien, S-Road message-bus, machtigingsregister):
+Fase 3+, sterk afhankelijk van het e-Gov-programma — zie blauwdruk-caveats in
+[12-blauwdruk-esuriname-g2g-c2g.md](12-blauwdruk-esuriname-g2g-c2g.md).
+
+Bij sessies van een paar uur per dag: MVP-restant ~3-4 maanden, Fase 2 ~14-16 maanden.

@@ -20,7 +20,7 @@ export const RequirePermissies = (...codes: string[]) =>
   SetMetadata(PERMISSIE_KEY, codes);
 
 export const RequireScope = (
-  scope: 'NATIONAAL' | 'DISTRICT' | 'RESSORT',
+  scope: 'NATIONAAL' | 'DISTRICT' | 'RESSORT' | 'ORGANISATIE',
   paramName?: string,
 ) => SetMetadata(SCOPE_KEY, { scope, paramName });
 
@@ -34,7 +34,7 @@ export class RbacGuard implements CanActivate {
       ctx.getClass(),
     ]);
     const scopeMeta = this.reflector.getAllAndOverride<{
-      scope: 'NATIONAAL' | 'DISTRICT' | 'RESSORT';
+      scope: 'NATIONAAL' | 'DISTRICT' | 'RESSORT' | 'ORGANISATIE';
       paramName?: string;
     }>(SCOPE_KEY, [ctx.getHandler(), ctx.getClass()]);
 
@@ -65,11 +65,15 @@ export class RbacGuard implements CanActivate {
 
 function checkScope(
   user: AuthenticatedUser,
-  meta: { scope: 'NATIONAAL' | 'DISTRICT' | 'RESSORT'; paramName?: string },
+  meta: { scope: 'NATIONAAL' | 'DISTRICT' | 'RESSORT' | 'ORGANISATIE'; paramName?: string },
   req: Request,
 ): boolean {
-  // Nationale rollen mogen altijd
-  if (user.rollen.some((r) => r.scope === 'NATIONAAL')) return true;
+  // Nationale rollen mogen altijd — behalve op ORGANISATIE-scope: externe
+  // diensten zijn een eigen silo en een nationale RO-rol is daar niet
+  // automatisch lid van (anders zou RO elk dienst-dossier kunnen indienen).
+  if (meta.scope !== 'ORGANISATIE' && user.rollen.some((r) => r.scope === 'NATIONAAL')) {
+    return true;
+  }
   if (meta.scope === 'NATIONAAL') return false;
 
   const paramValue = meta.paramName ? Number(req.params[meta.paramName]) : null;
@@ -87,6 +91,12 @@ function checkScope(
         // DC heeft ook toegang tot ressorten in zijn district — caller
         // moet expliciet de district-check toepassen indien gewenst
         (r.scope === 'DISTRICT'),
+    );
+  }
+  if (meta.scope === 'ORGANISATIE') {
+    // Externe-dienst-gebruiker mag alleen binnen de eigen organisatie. EO2.
+    return user.rollen.some(
+      (r) => r.scope === 'ORGANISATIE' && r.organisatieId === paramValue,
     );
   }
   return false;

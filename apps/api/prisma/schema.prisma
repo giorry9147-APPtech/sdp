@@ -44,6 +44,7 @@ model District {
   districtsfondsen  Districtsfonds[]
   gebruikerRollen   GebruikerRol[]
   dcNotities        DcNotitie[]
+  verzoeken         Verzoek[]
 
   @@map("districten")
 }
@@ -108,6 +109,7 @@ model Ressort {
   projecten       Project[]
   ressortplannen  Ressortplan[]
   gebruikerRollen GebruikerRol[]
+  verzoeken       Verzoek[]
 
   @@unique([districtId, naam])
   @@index([districtId])
@@ -160,6 +162,9 @@ model Gebruiker {
   magicLinks      MagicLink[]
   dcNotities      DcNotitie[]
   projectRisicos  ProjectRisico[]
+  verzoekenIngediend  Verzoek[]      @relation("VerzoekIngediendDoor")
+  verzoekenBeantwoord Verzoek[]      @relation("VerzoekBeantwoordDoor")
+  verzoekEvents       VerzoekEvent[]
 
   @@index([authProvider, externalId])
   @@map("gebruikers")
@@ -169,6 +174,7 @@ enum RolScope {
   NATIONAAL
   DISTRICT
   RESSORT
+  ORGANISATIE // externe overheidsdienst (zie model Organisatie) — EO2
 }
 
 /// Standaard-rollen worden geseed; nieuwe rollen kunnen later
@@ -209,8 +215,8 @@ model RolPermissie {
   @@map("rol_permissies")
 }
 
-/// Rol-toewijzing met scope (district of ressort) en optionele einddatum
-/// (inhuur, wisseling DC, etc.).
+/// Rol-toewijzing met scope (district, ressort of organisatie) en optionele
+/// einddatum (inhuur, wisseling DC, etc.).
 model GebruikerRol {
   id          Int       @id @default(autoincrement())
   gebruikerId String    @map("gebruiker_id")
@@ -218,22 +224,264 @@ model GebruikerRol {
   districtId  Int?      @map("district_id")
   ressortId   Int?      @map("ressort_id")
   subregioId  Int?      @map("subregio_id") // DC-cluster binnen district (optioneel)
+  organisatieId Int?    @map("organisatie_id") // externe dienst (scope ORGANISATIE) — EO2
   geldigVan   DateTime  @default(now()) @map("geldig_van")
   geldigTot   DateTime? @map("geldig_tot")
   createdAt   DateTime  @default(now()) @map("created_at")
   createdBy   String?   @map("created_by")
 
-  gebruiker Gebruiker  @relation(fields: [gebruikerId], references: [id], onDelete: Cascade)
-  rol       Rol        @relation(fields: [rolId], references: [id])
-  district  District?  @relation(fields: [districtId], references: [id])
-  ressort   Ressort?   @relation(fields: [ressortId], references: [id])
-  subregio  Subregio?  @relation(fields: [subregioId], references: [id])
+  gebruiker   Gebruiker    @relation(fields: [gebruikerId], references: [id], onDelete: Cascade)
+  rol         Rol          @relation(fields: [rolId], references: [id])
+  district    District?    @relation(fields: [districtId], references: [id])
+  ressort     Ressort?     @relation(fields: [ressortId], references: [id])
+  subregio    Subregio?    @relation(fields: [subregioId], references: [id])
+  organisatie Organisatie? @relation(fields: [organisatieId], references: [id])
 
   @@index([gebruikerId])
   @@index([rolId])
   @@index([districtId])
   @@index([subregioId])
+  @@index([organisatieId])
   @@map("gebruiker_rollen")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// EXTERNE ORGANISATIES — overheidsdiensten die verzoeken indienen bij
+// het DC (Module P). Zie docs/11-externe-organisaties.md + ADR 0006.
+// EO1: het model. Verzoeken zelf komen in EO4.
+// ═══════════════════════════════════════════════════════════════════
+
+enum OrganisatieType {
+  MINISTERIE  // bv. GBB, TCT, EZ
+  DIENST      // bv. Dienst der Domeinen
+  PARASTATAAL // bv. SBB, nutsbedrijf
+  ANDER
+}
+
+model Organisatie {
+  id           Int             @id @default(autoincrement())
+  code         String          @unique // "GBB", "SBB", "TCT", "EZ"
+  naam         String                   // volledige naam
+  korteNaam    String?         @map("korte_naam")
+  type         OrganisatieType
+  actief       Boolean         @default(true)
+  contactEmail String?         @map("contact_email")
+  // Vrije tags van wettelijke domeinen die deze org afhandelt — voor
+  // filtering bij verzoek-routering (bv. ["domeingrond","houtconcessie"]).
+  domeinen     String[]        @default([])
+  // Nationaal organisatie-ID (OIN-SR) — nu nullable; standaardisatie in ZF6.
+  oinSr        String?         @unique @map("oin_sr")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  gebruikerRollen GebruikerRol[]
+  verzoeken       Verzoek[]
+
+  @@index([type, actief])
+  @@map("organisaties")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ZAAK-FUNDAMENT — catalogus-gedreven zaaktypen (ZF1–ZF3)
+// "Configuratie boven code": een nieuw verzoek-/verklaring-type is een
+// seed-rij in deze catalogus, géén code-release. Zowel `Verzoek` (G2G,
+// EO4) als `Verklaring` (C2G, VK1) verwijzen via `zaaktypeId` hierheen.
+// Bestaande modules (Melding/Vergunning) blijven apart; later ZGW-mapbaar.
+// Zie docs/11 §11 + docs/12-blauwdruk-esuriname-g2g-c2g.md.
+// ═══════════════════════════════════════════════════════════════════
+
+enum Zaakkanaal {
+  G2G // overheidsdienst → DC (verzoek/adviesverzoek)
+  C2G // burger → DC (verklaring)
+}
+
+enum InitiatorType {
+  ORGANISATIE // externe dienst
+  BURGER
+}
+
+/// ZF3 — vertrouwelijkheidsklasse op zaak + document. CONFIDENTIEEL
+/// (bv. KPS-antecedenten) is alleen zichtbaar voor de behandelende
+/// DC-rol; afgedwongen via magZienVertrouwelijkheid() in de service-laag.
+enum Vertrouwelijkheid {
+  OPENBAAR
+  INTERN
+  VERTROUWELIJK
+  CONFIDENTIEEL
+}
+
+enum EigenschapType {
+  TEKST
+  GETAL
+  DATUM
+  JA_NEE
+  KEUZE
+}
+
+model Zaaktype {
+  id                       Int               @id @default(autoincrement())
+  code                     String            @unique // "DOMEINGROND", "VGG"
+  naam                     String
+  kanaal                   Zaakkanaal
+  initiatorType            InitiatorType     @map("initiator_type")
+  // Code van de initiërende organisatie bij G2G (referentie, geen FK —
+  // catalogus blijft licht). Null bij C2G (burger).
+  bronOrganisatieCode      String?           @map("bron_organisatie_code")
+  slaWerkdagen             Int               @default(14) @map("sla_werkdagen")
+  defaultVertrouwelijkheid Vertrouwelijkheid @default(INTERN) @map("default_vertrouwelijkheid")
+  wettelijkeGrondslag      String?           @map("wettelijke_grondslag")
+  beschrijving             String?
+  actief                   Boolean           @default(true)
+  volgorde                 Int               @default(0)
+  createdAt                DateTime          @default(now()) @map("created_at")
+  updatedAt                DateTime          @updatedAt @map("updated_at")
+
+  statustypen    Statustype[]
+  resultaattypen Resultaattype[]
+  eigenschappen  Eigenschap[]
+  verzoeken      Verzoek[]
+
+  @@index([kanaal, actief])
+  @@map("zaaktypen")
+}
+
+/// Geordende statussen per zaaktype. `volgnummer` bepaalt het toegestane
+/// pad (statustransitie-validatie = ZF5, bouwt hierop voort).
+model Statustype {
+  id         Int     @id @default(autoincrement())
+  zaaktypeId Int     @map("zaaktype_id")
+  code       String  // "ONTVANGEN", "IN_BEHANDELING", "AFGEHANDELD"
+  naam       String
+  volgnummer Int
+  isEind     Boolean @default(false) @map("is_eind")
+
+  zaaktype Zaaktype @relation(fields: [zaaktypeId], references: [id], onDelete: Cascade)
+
+  @@unique([zaaktypeId, code])
+  @@index([zaaktypeId, volgnummer])
+  @@map("statustypen")
+}
+
+/// Mogelijke uitkomsten per zaaktype (advies/beschikking-resultaat).
+model Resultaattype {
+  id         Int    @id @default(autoincrement())
+  zaaktypeId Int    @map("zaaktype_id")
+  code       String // "GEEN_BEZWAAR", "POSITIEF", "VGG_AFGEGEVEN"
+  naam       String
+
+  zaaktype Zaaktype @relation(fields: [zaaktypeId], references: [id], onDelete: Cascade)
+
+  @@unique([zaaktypeId, code])
+  @@map("resultaattypen")
+}
+
+/// ZF2 — definitie van zaaktype-specifieke velden (los van de hoofdtabel).
+/// De waarden worden op de concrete zaak (Verzoek/Verklaring) opgeslagen
+/// als JSON-map, gevalideerd tegen deze definities via valideerEigenschappen().
+model Eigenschap {
+  id         Int            @id @default(autoincrement())
+  zaaktypeId Int            @map("zaaktype_id")
+  code       String         // "LAD_nr", "perceel_nr", "doel"
+  label      String
+  type       EigenschapType @default(TEKST)
+  verplicht  Boolean        @default(false)
+  volgnummer Int            @default(0)
+  opties     String[]       @default([]) // keuzelijst bij type KEUZE
+
+  zaaktype Zaaktype @relation(fields: [zaaktypeId], references: [id], onDelete: Cascade)
+
+  @@unique([zaaktypeId, code])
+  @@index([zaaktypeId])
+  @@map("eigenschappen")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VERZOEKEN (G2G) — externe dienst dient een verzoek/adviesverzoek in
+// bij het DC (Module P, EO4). Event-sourced als Melding; verwijst naar
+// de zaaktype-catalogus (ZF). Status + resultaat zijn catalogus-codes.
+// ═══════════════════════════════════════════════════════════════════
+
+model Verzoek {
+  id                Int       @id @default(autoincrement())
+  referentie        String    @unique // "VZK-2026-WAN-XXXX"
+  zaaktypeId        Int       @map("zaaktype_id")
+  bronOrganisatieId Int       @map("bron_organisatie_id")
+  districtId        Int       @map("district_id")
+  ressortId         Int?      @map("ressort_id")
+
+  // Workflow — catalogus-gedreven: statusCode = code uit Statustype van
+  // het zaaktype. afgehandeldOp gezet bij eind-status (snel filteren).
+  statusCode        String            @map("status_code")
+  vertrouwelijkheid Vertrouwelijkheid @default(INTERN)
+
+  onderwerp           String
+  omschrijving        String  @db.Text
+  locatieOmschrijving String? @map("locatie_omschrijving")
+  geom                Unsupported("geography(Point, 4326)")?
+  externeReferentie   String? @map("externe_referentie") // dossiernr van de dienst
+  // ZF2 — zaaktype-specifieke velden, gevalideerd tegen Eigenschap-definities
+  eigenschappen       Json?
+  deadline            DateTime? // afgeleid van zaaktype.slaWerkdagen bij indienen
+
+  ingediendDoorId String?   @map("ingediend_door_id")
+  afgehandeldOp   DateTime? @map("afgehandeld_op")
+  ingetrokkenOp   DateTime? @map("ingetrokken_op")
+
+  // Antwoord van de DC — resultaatCode = code uit Resultaattype
+  resultaatCode    String?   @map("resultaat_code")
+  antwoord         String?   @db.Text
+  beantwoordDoorId String?   @map("beantwoord_door_id")
+  beantwoordOp     DateTime? @map("beantwoord_op")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  zaaktype        Zaaktype         @relation(fields: [zaaktypeId], references: [id])
+  bronOrganisatie Organisatie      @relation(fields: [bronOrganisatieId], references: [id])
+  district        District         @relation(fields: [districtId], references: [id])
+  ressort         Ressort?         @relation(fields: [ressortId], references: [id])
+  ingediendDoor   Gebruiker?       @relation("VerzoekIngediendDoor", fields: [ingediendDoorId], references: [id])
+  beantwoordDoor  Gebruiker?       @relation("VerzoekBeantwoordDoor", fields: [beantwoordDoorId], references: [id])
+  events          VerzoekEvent[]
+  bijlages        VerzoekBijlage[]
+
+  @@index([districtId, statusCode, createdAt(sort: Desc)])
+  @@index([bronOrganisatieId, statusCode])
+  @@index([zaaktypeId])
+  @@index([deadline])
+  @@map("verzoeken")
+}
+
+model VerzoekEvent {
+  id        BigInt   @id @default(autoincrement())
+  verzoekId Int      @map("verzoek_id")
+  actorId   String?  @map("actor_id")
+  type      String   // 'ingediend', 'toegewezen', 'status_gewijzigd', 'beantwoord', 'ingetrokken'
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  verzoek Verzoek    @relation(fields: [verzoekId], references: [id], onDelete: Cascade)
+  actor   Gebruiker? @relation(fields: [actorId], references: [id])
+
+  @@index([verzoekId, createdAt])
+  @@map("verzoek_events")
+}
+
+model VerzoekBijlage {
+  id                Int               @id @default(autoincrement())
+  verzoekId         Int               @map("verzoek_id")
+  fileKey           String            @map("file_key")
+  soort             String // 'foto', 'document', 'kaart'
+  bestandsnaam      String            @map("bestandsnaam")
+  grootte           Int
+  mimeType          String            @map("mime_type")
+  vertrouwelijkheid Vertrouwelijkheid @default(INTERN) // ZF3 — kan strikter zijn dan de zaak
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  verzoek Verzoek @relation(fields: [verzoekId], references: [id], onDelete: Cascade)
+
+  @@index([verzoekId])
+  @@map("verzoek_bijlages")
 }
 
 model Sessie {

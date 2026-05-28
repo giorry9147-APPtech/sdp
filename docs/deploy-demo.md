@@ -180,7 +180,7 @@ Open de Vercel-URL en doorloop:
 - [ ] `/districten` — 10 districten zichtbaar (= data uit Neon!)
 - [ ] `/melden` — formulier werkt, melding indienen geeft ticketnummer
 - [ ] `/status?nr=...` — net ingediende melding zichtbaar
-- [ ] `/login` met `dc.wanica@sdp.local` / `Welkom2026!`
+- [ ] `/login` met `ernesto.muller@sdp.sr` / `Welkom2026!` (DC Wanica; `dc.wanica@sdp.local` is gedeactiveerd na `admin:seed-dcs`)
 - [ ] `/dashboard` — KPI-tegels gevuld
 - [ ] `/dashboard/financien/1` — Districtsfonds Wanica met grafieken
 

@@ -28,6 +28,11 @@ type Ctx = {
   /** C6 — handmatig gekozen ressort-filter (undefined = alle ressorten). */
   gekozenRessortId?: number;
   setGekozenRessortId: (id: number | undefined) => void;
+  /** Module P — externe-dienst-gebruiker (scope ORGANISATIE). */
+  isExtern: boolean;
+  activeOrganisatieId?: number;
+  activeOrganisatieCode?: string;
+  activeOrganisatieNaam?: string;
   permissies: Set<string>;
   heeft: (permissie: string) => boolean;
   uitloggen: () => void;
@@ -62,6 +67,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       ressortRol?.districtId ?? districtRol?.districtId ?? (isNationaal ? 1 : 0);
     const subregioRol = s.user.rollen.find((r) => r.subregioId);
     const activeSubregioId = subregioRol?.subregioId;
+    const orgRol = s.user.rollen.find((r) => r.scope === 'ORGANISATIE' && r.organisatieId);
     const permissies = new Set(s.user.permissies);
     return {
       sessie: s,
@@ -76,6 +82,10 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         filterEigenSubregio && activeSubregioId ? activeSubregioId : undefined,
       gekozenRessortId,
       setGekozenRessortId,
+      isExtern: Boolean(orgRol),
+      activeOrganisatieId: orgRol?.organisatieId,
+      activeOrganisatieCode: orgRol?.organisatieCode,
+      activeOrganisatieNaam: orgRol?.organisatieNaam,
       permissies,
       heeft: (p: string) => permissies.has(p),
       uitloggen: () => {

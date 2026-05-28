@@ -26,6 +26,8 @@ function Innerlijk({ children }: { children: React.ReactNode }) {
     setFilterEigenSubregio,
     gekozenRessortId,
     setGekozenRessortId,
+    isExtern,
+    activeOrganisatieNaam,
   } = useDashboard();
   const path = usePathname();
   const [ressorten, setRessorten] = useState<Ressort[]>([]);
@@ -39,14 +41,20 @@ function Innerlijk({ children }: { children: React.ReactNode }) {
   }, [activeDistrictId]);
 
   type NavItem = { href: string; label: string; needs?: string };
-  const items: NavItem[] = [
-    { href: '/dashboard', label: 'Overzicht' },
-    { href: '/dashboard/meldingen', label: 'Meldingen', needs: 'melding.read.district' },
-    { href: '/dashboard/vergunningen', label: 'Vergunningen', needs: 'vergunning.read.district' },
-    { href: '/dashboard/projecten', label: 'Projecten', needs: 'project.read.district' },
-    { href: '/dashboard/plannen', label: 'Plannen' },
-    { href: '/dashboard/financien', label: 'Districtsfonds', needs: 'fonds.read' },
-  ];
+  const items: NavItem[] = isExtern
+    ? [
+        { href: '/dashboard', label: 'Overzicht' },
+        { href: '/dashboard/verzoeken', label: 'Mijn verzoeken', needs: 'verzoek.read.eigen_organisatie' },
+      ]
+    : [
+        { href: '/dashboard', label: 'Overzicht' },
+        { href: '/dashboard/meldingen', label: 'Meldingen', needs: 'melding.read.district' },
+        { href: '/dashboard/vergunningen', label: 'Vergunningen', needs: 'vergunning.read.district' },
+        { href: '/dashboard/verzoeken', label: 'Verzoeken', needs: 'verzoek.read.district' },
+        { href: '/dashboard/projecten', label: 'Projecten', needs: 'project.read.district' },
+        { href: '/dashboard/plannen', label: 'Plannen' },
+        { href: '/dashboard/financien', label: 'Districtsfonds', needs: 'fonds.read' },
+      ];
   const zichtbaar = items.filter((i) => !i.needs || heeft(i.needs));
 
   return (
@@ -63,6 +71,13 @@ function Innerlijk({ children }: { children: React.ReactNode }) {
             <p className="mt-1 text-xs">
               <span className="rounded-full bg-sdp-groen/10 px-2 py-0.5 text-sdp-groen">
                 {activeSubregioCode} · {activeSubregioNaam}
+              </span>
+            </p>
+          )}
+          {isExtern && activeOrganisatieNaam && (
+            <p className="mt-1 text-xs">
+              <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-indigo-800">
+                Externe dienst · {activeOrganisatieNaam}
               </span>
             </p>
           )}

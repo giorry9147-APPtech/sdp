@@ -23,6 +23,8 @@ Documentatieset voor het ontwerp en de bouw van het **Suriname Decentralisatie P
 | 08 | [WRO-compliance mapping](08-wro-compliance.md) | Per artikel Wet Regionale Organen: status MVP + gap + fase |
 | 09 | [Backlog MVP + Fase 2](09-backlog.md) | Concrete checklist met effort-schattingen |
 | 10 | [Demo walkthrough (B/C/F)](10-demo-walkthrough.md) | Stap-voor-stap demo van Burger Meldpunt, DC-dashboard en Projectmonitoring |
+| 11 | [Externe organisaties](11-externe-organisaties.md) | Diensten (GBB/SBB/TCT/EZ) loggen in en dienen verzoeken/adviesverzoeken in bij het DC — ontwerp + onderzoek + gap-analyse |
+| 12 | [Blauwdruk e-Suriname G2G & C2G](12-blauwdruk-esuriname-g2g-c2g.md) | Bredere noordster: OpenZaak-SR / S-Road / MijnSuriname, VGG-flagship, zaaktypen-catalogus |
 
 ## Bronnen
 
